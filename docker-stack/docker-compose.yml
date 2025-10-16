@@ -1,0 +1,643 @@
+
+# Global networks for service communication
+networks:
+  observability:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  backend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  loki_data:
+    driver: local
+  minio_data:
+    driver: local
+  postgresql_data:
+    driver: local
+  jaeger_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+
+
+services:
+
+  # ========================================
+  # INFRASTRUCTURE & SECURITY LAYER
+  # ========================================
+
+  # Vault for secrets management
+  vault:
+    image: vault:latest
+    container_name: vault
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: "hvs.ebanking.oddo.bhf.prod"
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+      VAULT_ADDR: "http://0.0.0.0:8200"
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - ./vault/config:/vault/config
+      - ./vault/data:/vault/data
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8200/v1/sys/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  # ========================================
+  # DATA SOURCES LAYER
+  # ========================================
+
+  # SQL Server for E-Banking data
+  sql_server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sql_server_ebanking
+    ports:
+      - "1433:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "OdDo.BHF.SecureP@ss123"
+      MSSQL_PID: "Standard"
+      MSSQL_AGENT_ENABLED: "true"
+    volumes:
+      - ./mssql/data:/var/opt/mssql/data
+      - ./mssql/scripts:/docker-entrypoint-initdb.d
+      - ./mssql/backup:/var/opt/mssql/backup
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "OdDo.BHF.SecureP@ss123", "-Q", "SELECT 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--query.max-samples=10000000'
+      - '--query.timeout=2m'
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    user: "nobody"
+
+  # Elasticsearch for logs storage (Source 1)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.security.enrollment.enabled=true
+      - ELASTIC_PASSWORD=EsEc@re.OddoBhf123
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.security.transport.ssl.keystore.path=certs/elasticsearch.keystore.p12
+      - xpack.security.transport.ssl.truststore.path=certs/elasticsearch.truststore.p12
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.keystore.path=certs/elasticsearch.keystore.p12
+      - xpack.security.http.ssl.truststore.path=certs/elasticsearch.truststore.p12
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - ./elasticsearch/certs:/usr/share/elasticsearch/config/certs:ro
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -u elastic:EsEc@re.OddoBhf123 http://localhost:9200/_cluster/health | grep -q green"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+  # Jaeger for distributed tracing (Source 2)
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5775:5775/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    environment:
+      COLLECTOR_ZIPKIN_HOST_PORT: ":9411"
+      COLLECTOR_OTLP_ENABLED: "true"
+      SPAN_STORAGE_TYPE: "elasticsearch"
+      ES_SERVER_URLS: "https://elastic:EsEc@re.OddoBhf123@elasticsearch:9200"
+      ES_TLS_ENABLED: "false"
+      ES_USERNAME: "elastic"
+      ES_PASSWORD: "EsEc@re.OddoBhf123"
+    volumes:
+      - jaeger_data:/badger/data
+    networks:
+      - observability
+    depends_on:
+      - elasticsearch
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:16686/api/traces/search"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  # Loki for log aggregation (Source 3)
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    user: "nobody"
+
+  # ========================================
+  # DATA COLLECTORS LAYER
+  # ========================================
+
+  # Prometheus Node Exporter for system metrics
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - observability
+    security_opt:
+      - no-new-privileges:true
+
+  # Custom C# E-Banking Metrics Exporter (Mock/Template)
+  # This should be replaced with your actual C# metrics exporter
+  ebanking_metrics_exporter:
+    image: mcr.microsoft.com/dotnet/runtime:7.0
+    container_name: ebanking_metrics_exporter
+    ports:
+      - "9200:9200"
+    environment:
+      ASPNETCORE_URLS: "http://+:9200"
+      SQL_SERVER: "sql_server:1433"
+      SQL_USER: "sa"
+      SQL_PASSWORD: "OdDo.BHF.SecureP@ss123"
+      DATABASE_NAME: "EBankingODDO"
+      METRICS_PORT: "9200"
+      PROMETHEUS_PUSHGATEWAY: "pushgateway:9091"
+      JAEGER_AGENT_HOST: "jaeger"
+      JAEGER_AGENT_PORT: "6831"
+    volumes:
+      - ./ebanking-exporter/app:/app
+      - ./ebanking-exporter/appsettings.json:/app/appsettings.json:ro
+    networks:
+      - observability
+      - backend
+    depends_on:
+      - sql_server
+      - prometheus
+      - jaeger
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - ./ebanking-exporter/appsettings.env
+      - DOTNET_RUNNING_IN_CONTAINER=true
+
+  # Promtail for log collection from containers
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - observability
+    depends_on:
+      - loki
+    security_opt:
+      - no-new-privileges:true
+
+  # Telegraf for system and service metrics
+  telegraf:
+    image: telegraf:latest
+    container_name: telegraf
+    ports:
+      - "8125:8125/udp"
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      INFLUXDB_URL: "http://influxdb:8086"
+      PROMETHEUS_URL: "http://prometheus:9090"
+    networks:
+      - observability
+    depends_on:
+      - prometheus
+    security_opt:
+      - no-new-privileges:true
+    user: "telegraf"
+
+  # Pushgateway for batch jobs metrics
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: pushgateway
+    ports:
+      - "9091:9091"
+    networks:
+      - observability
+    security_opt:
+      - no-new-privileges:true
+
+  # ========================================
+  # PROCESSING & AGGREGATION LAYER
+  # ========================================
+
+  # AlertManager for alert routing
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/notification-templates:/etc/alertmanager/templates:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--log.level=info'
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9093/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  # ========================================
+  # STORAGE LAYER
+  # ========================================
+
+  # MinIO for object storage (S3 compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: "minioadmin"
+      MINIO_ROOT_PASSWORD: "Minio.OddoBhf@Secure123"
+      MINIO_VOLUMES: "/data"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  # PostgreSQL for Grafana and service metadata
+  postgresql:
+    image: postgres:15-alpine
+    container_name: postgresql
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: "grafana_admin"
+      POSTGRES_PASSWORD: "Grafana.OddoBhf@Secure123"
+      POSTGRES_DB: "grafana_db"
+      POSTGRES_INITDB_ARGS: "-c ssl=on -c ssl_cert_file=/var/lib/postgresql/server.crt -c ssl_key_file=/var/lib/postgresql/server.key"
+    volumes:
+      - postgresql_data:/var/lib/postgresql/data
+      - ./postgresql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grafana_admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  # ========================================
+  # GRAFANA CORE PLATFORM
+  # ========================================
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "Grafana.OddoBhf@Secure123"
+      GF_SECURITY_SECRET_KEY: "Grafana.OddoBhf.SecretKey2024"
+      GF_DATABASE_TYPE: "postgres"
+      GF_DATABASE_HOST: "postgresql:5432"
+      GF_DATABASE_NAME: "grafana_db"
+      GF_DATABASE_USER: "grafana_admin"
+      GF_DATABASE_PASSWORD: "Grafana.OddoBhf@Secure123"
+      GF_DATABASE_SSL_MODE: "require"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SMTP_ENABLED: "true"
+      GF_SMTP_HOST: "smtp.gmail.com:587"
+      GF_SMTP_USER: "your-email@gmail.com"
+      GF_SMTP_PASSWORD: "your-app-password"
+      GF_SMTP_FROM_ADDRESS: "ebanking-alerts@oddo-bhf.com"
+      GF_INSTALL_PLUGINS: "grafana-piechart-panel,grafana-worldmap-panel,grafana-clock-panel"
+      GF_LOG_LEVEL: "info"
+      GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION: "false"
+      GF_EXPLORE_ENABLED: "true"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
+      - ./grafana/custom-dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - observability
+    depends_on:
+      - postgresql
+      - prometheus
+      - elasticsearch
+      - loki
+      - jaeger
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+  # ========================================
+  # E-BANKING MICROSERVICES (C# APPS)
+  # ========================================
+
+  # Authentication Service
+  auth_service:
+    image: ebanking/auth-service:latest
+    container_name: auth_service
+    ports:
+      - "5001:5001"
+    environment:
+      ASPNETCORE_URLS: "http://+:5001"
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__DefaultConnection: "Server=sql_server,1433;Database=EBankingAuth;User Id=sa;Password=OdDo.BHF.SecureP@ss123;"
+      Vault__Url: "http://vault:8200"
+      Vault__Token: "hvs.ebanking.oddo.bhf.prod"
+      Prometheus__PushGatewayUrl: "http://pushgateway:9091"
+      Jaeger__AgentHost: "jaeger"
+      Jaeger__AgentPort: "6831"
+      Serilog__MinimumLevel: "Information"
+      Elasticsearch__Url: "http://elasticsearch:9200"
+      Elasticsearch__Username: "elastic"
+      Elasticsearch__Password: "EsEc@re.OddoBhf123"
+    volumes:
+      - ./auth-service/appsettings.json:/app/appsettings.json:ro
+      - ./auth-service/appsettings.Production.json:/app/appsettings.Production.json:ro
+    networks:
+      - observability
+      - backend
+    depends_on:
+      - sql_server
+      - vault
+      - prometheus
+      - jaeger
+      - elasticsearch
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+
+  # Transaction Service
+  transaction_service:
+    image: ebanking/transaction-service:latest
+    container_name: transaction_service
+    ports:
+      - "5002:5002"
+    environment:
+      ASPNETCORE_URLS: "http://+:5002"
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__DefaultConnection: "Server=sql_server,1433;Database=EBankingTransactions;User Id=sa;Password=OdDo.BHF.SecureP@ss123;"
+      Vault__Url: "http://vault:8200"
+      Vault__Token: "hvs.ebanking.oddo.bhf.prod"
+      Prometheus__PushGatewayUrl: "http://pushgateway:9091"
+      Jaeger__AgentHost: "jaeger"
+      Jaeger__AgentPort: "6831"
+      Serilog__MinimumLevel: "Information"
+      Elasticsearch__Url: "http://elasticsearch:9200"
+      Elasticsearch__Username: "elastic"
+      Elasticsearch__Password: "EsEc@re.OddoBhf123"
+      KPI__Enabled: "true"
+      KPI__ReportingInterval: "300"
+    volumes:
+      - ./transaction-service/appsettings.json:/app/appsettings.json:ro
+      - ./transaction-service/appsettings.Production.json:/app/appsettings.Production.json:ro
+    networks:
+      - observability
+      - backend
+    depends_on:
+      - sql_server
+      - vault
+      - prometheus
+      - jaeger
+      - elasticsearch
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+
+  # KPI Tracking Service
+  kpi_service:
+    image: ebanking/kpi-service:latest
+    container_name: kpi_service
+    ports:
+      - "5003:5003"
+    environment:
+      ASPNETCORE_URLS: "http://+:5003"
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__DefaultConnection: "Server=sql_server,1433;Database=EBankingKPI;User Id=sa;Password=OdDo.BHF.SecureP@ss123;"
+      Vault__Url: "http://vault:8200"
+      Vault__Token: "hvs.ebanking.oddo.bhf.prod"
+      Prometheus__PushGatewayUrl: "http://pushgateway:9091"
+      Jaeger__AgentHost: "jaeger"
+      Jaeger__AgentPort: "6831"
+      Serilog__MinimumLevel: "Information"
+      Elasticsearch__Url: "http://elasticsearch:9200"
+      Elasticsearch__Username: "elastic"
+      Elasticsearch__Password: "EsEc@re.OddoBhf123"
+      KPI__Metrics: "TransactionVolume,SuccessRate,AverageResponseTime,ErrorRate,UserEngagement"
+      KPI__AggregationInterval: "60"
+      KPI__AlertThreshold: "0.95"
+    volumes:
+      - ./kpi-service/appsettings.json:/app/appsettings.json:ro
+      - ./kpi-service/appsettings.Production.json:/app/appsettings.Production.json:ro
+    networks:
+      - observability
+      - backend
+    depends_on:
+      - sql_server
+      - vault
+      - prometheus
+      - jaeger
+      - elasticsearch
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5003/health/kpi"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+
+  # ========================================
+  # SECURITY & MONITORING
+  # ========================================
+
+  # Nginx Reverse Proxy with SSL/TLS
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    networks:
+      - observability
+    depends_on:
+      - grafana
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+  # Caddy for automatic HTTPS/SSL
+  caddy:
+    image: caddy:alpine
+    container_name: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      ACME_AGREE: "true"
+    networks:
+      - observability
+    security_opt:
+      - no-new-privileges:true
+
+
+
+# Security and Health Checks Configuration
+# Run with: docker-compose -f docker-compose.yml up -d
+# Monitor logs: docker-compose logs -f
+# Health check: docker-compose ps

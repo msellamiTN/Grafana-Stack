@@ -1,0 +1,32 @@
+{
+  "improved_prompt": "Create a comprehensive practical training course (100% hands-on with professional workshops) focused on e-Banking for ODDO BH enterprise in a Kubernetes environment using Grafana, Loki, and related observability tools. Structure the course into 5 modules covering: (1) Grafana OSS fundamentals including dashboard templating, provisioning, annotations, alerting, permissions, and SQL data sources; (2) Integration with InfluxDB and Prometheus for metrics collection; (3) Best practices including observability strategies, dashboard maturity models, exemplars, time series analysis, and connections to MySQL/PostgreSQL/SQL Server; (4) Organization and dashboard management including RBAC, user administration, and multi-tenancy; (5) Advanced templating with query variables and variable syntax. Each module must include at least 2 practical workshops using real e-banking scenarios (transaction monitoring, API performance tracking, customer journey analytics, fraud detection dashboards, or payment gateway observability). Workshops must provide step-by-step instructions with screenshots, YAML configuration files for K8s deployments, sample queries (PromQL/LogQL), and validation checkpoints. Target audience: DevOps engineers and SREs with basic Kubernetes knowledge. Course duration: 16-20 hours. Deliverables: course outline with learning objectives per module, workshop instructions with code samples, and assessment criteria.",
+  
+  "success_checklist": [
+    "Course contains exactly 5 modules matching the provided structure with Grafana OSS, data source integrations, best practices, organization management, and templating",
+    "Each module includes at least 2 hands-on workshops with e-banking examples relevant to ODDO BH enterprise context",
+    "Workshop instructions include step-by-step procedures, Kubernetes YAML manifests, Grafana dashboard JSON, and sample PromQL/LogQL queries",
+    "Course targets 100% practical learning with no more than 20% theory content per module",
+    "All workshops include validation checkpoints where learners verify their implementations against expected outputs",
+    "Content covers Kubernetes-specific deployment scenarios for Grafana, Prometheus, Loki stack with proper RBAC and persistence configurations",
+    "Deliverables include complete course outline, workshop materials with code samples, and clear assessment rubrics"
+  ],
+  
+  "assumptions": [
+    "ODDO BH is a financial services enterprise requiring monitoring of e-banking applications including transaction processing, API gateways, and customer-facing services",
+    "Target learners have basic Kubernetes knowledge including pod, service, deployment concepts and can execute kubectl commands",
+    "Training environment provides access to a Kubernetes cluster where learners can deploy Grafana stack components without production system risks",
+    "E-banking workshop scenarios should cover common observability use cases: transaction latency monitoring, error rate tracking, log aggregation for audit trails, and SLA dashboard creation",
+    "Course should emphasize production-ready configurations including high availability, persistent storage, and security best practices for financial services compliance"
+  ],
+  
+  "output_contract": {
+    "format": "Markdown",
+    "structure": "Document structured with H1 for course title, H2 for each of 5 modules, H3 for module sections (theory/workshops), H4 for workshop steps. Include code blocks with language tags (yaml/promql/json). Each workshop must have: objective, prerequisites, step-by-step instructions with commands, expected outputs, and validation criteria. Append assessment rubric table at end."
+  },
+  
+  "risk_flags": [
+    "Course content involves financial services monitoring which may require compliance review for data sensitivity handling in examples",
+    "Real ODDO BH system architecture details should be sanitized or anonymized in workshop examples to avoid exposing proprietary infrastructure",
+    "Kubernetes security configurations (RBAC, network policies, secrets management) must follow financial industry best practices to avoid creating insecure training habits"
+  ]
+}

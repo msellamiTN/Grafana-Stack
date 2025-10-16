@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ebanking-observability
+  labels:
+    name: ebanking-observability
+    environment: production
+    managed-by: devops-team
+    compliance: financial-services
+    project: oddo-bhf-monitoring
