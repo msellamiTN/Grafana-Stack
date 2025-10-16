@@ -120,3 +120,5 @@ kubeadm version
 echo "✅ Installation completed!"
 echo "📜 Log file saved at: $LOGFILE"
 echo "Use 'kubectl get nodes' to verify the cluster once initialized."
+
+#End
