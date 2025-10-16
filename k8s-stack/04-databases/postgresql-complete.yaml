@@ -78,8 +78,7 @@ spec:
           timeoutSeconds: 3
       volumes:
       - name: data
-        persistentVolumeClaim:
-          claimName: postgresql-data
+        emptyDir: {}
       - name: init-scripts
         configMap:
           name: postgresql-init-scripts

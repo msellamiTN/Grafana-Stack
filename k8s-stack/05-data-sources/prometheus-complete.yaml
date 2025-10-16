@@ -189,8 +189,7 @@ spec:
         configMap:
           name: prometheus-config
       - name: storage
-        persistentVolumeClaim:
-          claimName: prometheus-data
+        emptyDir: {}
 ---
 # Prometheus Service
 apiVersion: v1

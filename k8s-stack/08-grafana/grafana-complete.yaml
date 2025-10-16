@@ -217,8 +217,7 @@ spec:
           failureThreshold: 3
       volumes:
       - name: grafana-storage
-        persistentVolumeClaim:
-          claimName: grafana-data
+        emptyDir: {}
       - name: grafana-datasources
         configMap:
           name: grafana-datasources
