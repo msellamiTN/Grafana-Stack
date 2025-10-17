@@ -1,5 +1,5 @@
 # Build stage
-FROM mcr.microsoft.com/dotnet/sdk:7.0 AS builder
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS builder
 
 WORKDIR /app
 COPY *.csproj ./
@@ -9,7 +9,7 @@ COPY . ./
 RUN dotnet publish -c Release -o out --self-contained true --runtime linux-x64 /p:PublishSingleFile=true /p:PublishTrimmed=true
 
 # Runtime stage
-FROM mcr.microsoft.com/dotnet/runtime:7.0-alpine
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine
 
 RUN apk add --no-cache icu-libs
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
