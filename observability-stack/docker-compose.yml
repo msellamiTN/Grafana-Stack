@@ -81,16 +81,13 @@ services:
     networks:
       - observability
 
-  # eBanking Metrics Exporter (Changed port to 9201)
+  # eBanking Metrics Exporter
   ebanking_metrics_exporter:
-    image: your-ebanking-exporter:latest
+    build: ./ebanking-exporter
     container_name: ebanking_metrics_exporter
     restart: unless-stopped
     ports:
       - "9201:9200"  # Changed from 9200 to 9201 to avoid conflict
-    environment:
-      - EXPORTER_PORT=9200
-      - LOG_LEVEL=info
     security_opt:
       - no-new-privileges:true
     networks:
