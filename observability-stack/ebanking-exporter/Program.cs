@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -113,23 +115,15 @@ namespace EBankingMetricsExporter
             app.UseMetricServer();
 
             // Health check endpoint
-            app.Map("/health", healthApp =>
+            app.Map("/health", () =>
             {
-                healthApp.Run(async context =>
-                {
-                    context.Response.StatusCode = 200;
-                    await context.Response.WriteAsync("OK");
-                });
+                return Results.Ok("OK");
             });
 
             // Root endpoint with info
-            app.Map("/", appBuilder =>
+            app.Map("/", () =>
             {
-                appBuilder.Run(async context =>
-                {
-                    context.Response.StatusCode = 200;
-                    await context.Response.WriteAsync("eBanking Metrics Exporter\n\nEndpoints:\n- /metrics (Prometheus metrics)\n- /health (Health check)");
-                });
+                return Results.Ok("eBanking Metrics Exporter\n\nEndpoints:\n- /metrics (Prometheus metrics)\n- /health (Health check)");
             });
         }
     }
