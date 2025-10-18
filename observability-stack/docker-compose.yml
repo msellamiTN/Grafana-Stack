@@ -162,12 +162,32 @@ services:
       - "9001:9001"
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-MinioSecure123!Change@Me}
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
     security_opt:
       - no-new-privileges:true
+    networks:
+      - observability
+
+  # InfluxDB - Time Series Database
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USER:-admin}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD:-InfluxSecure123!Change@Me}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG:-myorg}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:-mybucket}
+      - DOCKER_INFLUXDB_INIT_RETENTION=1w
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:-my-super-secret-auth-token}
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
     networks:
       - observability
 
@@ -184,3 +204,4 @@ volumes:
   alertmanager_data:
   postgres_data:
   minio_data:
+  influxdb_data:

@@ -127,6 +127,17 @@ datasources:
     url: http://loki:3100
     jsonData:
       maxLines: 1000
+
+  - name: InfluxDB
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    jsonData:
+      version: Flux
+      organization: "${INFLUXDB_ORG:-myorg}"
+      defaultBucket: "${INFLUXDB_BUCKET:-mybucket}"
+    secureJsonData:
+      token: "${INFLUXDB_TOKEN:-my-super-secret-auth-token}"
 EOL
 
 # Create a temporary container to copy files to the volumes
