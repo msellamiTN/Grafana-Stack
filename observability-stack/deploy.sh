@@ -54,18 +54,29 @@ fi
 
 # Create necessary directories with proper permissions
 echo -e "${GREEN}📂 Creating required directories...${NC}"
-sudo mkdir -p grafana/{data,provisioning/datasources,provisioning/dashboards,config}
 sudo mkdir -p prometheus/rules alertmanager
+
+# Create Grafana volumes if they don't exist
+echo -e "${GREEN}🔧 Setting up Grafana volumes...${NC}"
+if ! docker volume inspect $(basename $(pwd))_grafana_data &>/dev/null; then
+    docker volume create $(basename $(pwd))_grafana_data
+fi
+if ! docker volume inspect $(basename $(pwd))_grafana_config &>/dev/null; then
+    docker volume create $(basename $(pwd))_grafana_config
+fi
+if ! docker volume inspect $(basename $(pwd))_grafana_provisioning &>/dev/null; then
+    docker volume create $(basename $(pwd))_grafana_provisioning
+fi
 
 # Set ownership to current user
 echo -e "${GREEN}🔒 Setting permissions...${NC}"
 sudo chown -R $USER:$USER .
-sudo chmod -R 775 grafana/
 
-# Create default Grafana configuration if not exists
-if [ ! -f grafana/config/grafana.ini ]; then
-    echo -e "${GREEN}📝 Creating default Grafana configuration...${NC}"
-    sudo tee grafana/config/grafana.ini > /dev/null << 'EOL'
+# Create default Grafana configuration
+echo -e "${GREEN}📝 Creating default Grafana configuration...${NC}"
+# Create a temporary directory for Grafana config
+TEMP_DIR=$(mktemp -d)
+cat > "$TEMP_DIR/grafana.ini" << 'EOL'
 [server]
 root_url = %(protocol)s://%(domain)s:%(http_port)s/
 serve_from_sub_path = false
@@ -95,11 +106,9 @@ allow_sign_up = false
 auto_assign_org = true
 auto_assign_org_role = Editor
 EOL
-fi
 
-# Create default datasource configuration
-echo -e "${GREEN}📝 Configuring data sources...${NC}"
-sudo tee grafana/provisioning/datasources/datasources.yaml > /dev/null << 'EOL'
+# Create data sources configuration
+cat > "$TEMP_DIR/datasources.yaml" << 'EOL'
 apiVersion: 1
 datasources:
   - name: Prometheus
@@ -119,6 +128,29 @@ datasources:
     jsonData:
       maxLines: 1000
 EOL
+
+# Create a temporary container to copy files to the volumes
+echo -e "${GREEN}📦 Setting up Grafana configuration...${NC}
+
+# Create a temporary container with the volumes attached
+docker run -d --name grafana_temp \
+  -v $(basename $(pwd))_grafana_config:/etc/grafana \
+  -v $(basename $(pwd))_grafana_provisioning:/etc/grafana/provisioning \
+  busybox tail -f /dev/null
+
+# Copy the configuration files
+docker cp "$TEMP_DIR/grafana.ini" grafana_temp:/etc/grafana/
+docker cp "$TEMP_DIR/datasources.yaml" grafana_temp:/etc/grafana/provisioning/
+
+# Set proper permissions
+docker exec grafana_temp chown -R 472:472 /etc/grafana
+
+# Clean up the temporary container
+docker stop grafana_temp
+docker rm grafana_temp
+
+# Clean up the temporary directory
+rm -rf "$TEMP_DIR"
 
 # Stop and remove existing containers
 echo -e "${GREEN}🛑 Stopping any running containers...${NC}"

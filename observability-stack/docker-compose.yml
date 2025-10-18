@@ -49,9 +49,9 @@ services:
       - GF_PATHS_DATA=/var/lib/grafana
       - GF_PATHS_LOGS=/var/log/grafana
     volumes:
-      - ./grafana/data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
-      - ./grafana/config/grafana.ini:/etc/grafana/grafana.ini
+      - grafana_data:/var/lib/grafana
+      - grafana_config:/etc/grafana
+      - grafana_provisioning:/etc/grafana/provisioning
     user: "472:472"
     security_opt:
       - no-new-privileges:true
@@ -178,6 +178,8 @@ networks:
 volumes:
   prometheus_data:
   grafana_data:
+  grafana_config:
+  grafana_provisioning:
   loki_data:
   alertmanager_data:
   postgres_data:
