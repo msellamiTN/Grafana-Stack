@@ -191,6 +191,47 @@ services:
     networks:
       - observability
 
+  # Payment API Mock
+  payment-api:
+    build: 
+      context: ./payment-api-mock
+      dockerfile: Dockerfile
+    container_name: payment-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - PROMETHEUS_METRICS_ENABLED=true
+      - SIMULATION_RATE=5  # Transactions per second
+    depends_on:
+      - prometheus
+    networks:
+      - observability
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-MySQLRoot123!Change@Me}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-observability}
+      - MYSQL_USER=${MYSQL_USER:-appuser}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-MySQLApp123!Change@Me}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/initdb.d:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${MYSQL_USER}", "-p${MYSQL_PASSWORD}"]
+      timeout: 5s
+      retries: 10
+    networks:
+      - observability
+
 networks:
   observability:
     driver: bridge
@@ -205,3 +246,4 @@ volumes:
   postgres_data:
   minio_data:
   influxdb_data:
+  mysql_data:
