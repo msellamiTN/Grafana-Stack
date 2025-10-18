@@ -1,33 +1,71 @@
 #!/bin/bash
 # Deploy script for Grafana Observability Stack
 
-echo "🚀 Starting deployment of Grafana Observability Stack..."
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
-# Load environment variables
-if [ -f .env ]; then
-    echo "🔧 Loading environment variables from .env file..."
-    export $(grep -v '^#' .env | xargs)
-else
-    echo "⚠️  No .env file found. Creating from .env.example..."
-    cp .env.example .env
-    echo "ℹ️  Please update the .env file with your configuration and run the script again."
+echo -e "${GREEN}🚀 Starting deployment of Grafana Observability Stack...${NC}"
+
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Function to check Docker is running
+docker_running() {
+    docker info > /dev/null 2>&1
+    return $?
+}
+
+# Check if Docker is running
+if ! docker_running; then
+    echo -e "${RED}❌ Docker is not running. Please start Docker and try again.${NC}"
     exit 1
 fi
 
-# Create necessary directories
-echo "📂 Creating required directories..."
-mkdir -p grafana/{data,provisioning/datasources,provisioning/dashboards,config}
-mkdir -p prometheus/rules
+# Check if we should use docker compose or docker-compose
+if command_exists docker-compose; then
+    DOCKER_COMPOSE_CMD="docker-compose"
+elif docker compose version &> /dev/null; then
+    DOCKER_COMPOSE_CMD="docker compose"
+else
+    echo -e "${RED}❌ Neither 'docker compose' nor 'docker-compose' is available. Please install Docker Compose.${NC}"
+    exit 1
+fi
 
-# Set proper permissions
-echo "🔒 Setting permissions..."
-sudo chown -R 472:472 grafana/
+# Load environment variables
+if [ -f .env ]; then
+    echo -e "${GREEN}🔧 Loading environment variables from .env file...${NC}"
+    # Handle the case where .env file has comments or spaces
+    export $(grep -v '^#' .env | xargs) > /dev/null 2>&1
+else
+    echo -e "${YELLOW}⚠️  No .env file found. Creating from .env.example...${NC}"
+    if [ -f .env.example ]; then
+        cp .env.example .env
+        echo -e "${YELLOW}ℹ️  Please update the .env file with your configuration and run the script again.${NC}"
+    else
+        echo -e "${RED}❌ Error: .env.example file not found. Please create a .env file.${NC}"
+    fi
+    exit 1
+fi
+
+# Create necessary directories with proper permissions
+echo -e "${GREEN}📂 Creating required directories...${NC}"
+sudo mkdir -p grafana/{data,provisioning/datasources,provisioning/dashboards,config}
+sudo mkdir -p prometheus/rules alertmanager
+
+# Set ownership to current user
+echo -e "${GREEN}🔒 Setting permissions...${NC}"
+sudo chown -R $USER:$USER .
 sudo chmod -R 775 grafana/
 
 # Create default Grafana configuration if not exists
 if [ ! -f grafana/config/grafana.ini ]; then
-    echo "📝 Creating default Grafana configuration..."
-    cat > grafana/config/grafana.ini << 'EOL'
+    echo -e "${GREEN}📝 Creating default Grafana configuration...${NC}"
+    sudo tee grafana/config/grafana.ini > /dev/null << 'EOL'
 [server]
 root_url = %(protocol)s://%(domain)s:%(http_port)s/
 serve_from_sub_path = false
@@ -37,9 +75,9 @@ type = sqlite3
 path = /var/lib/grafana/grafana.db
 
 [security]
-admin_user = admin
-admin_password = ${GRAFANA_ADMIN_PASSWORD}
-secret_key = ${GRAFANA_SECRET_KEY}
+admin_user = ${GRAFANA_ADMIN_USER:-admin}
+admin_password = ${GRAFANA_ADMIN_PASSWORD:-GrafanaSecure123!Change@Me}
+secret_key = ${GRAFANA_SECRET_KEY:-GrafanaSecret123!Change@Me}
 disable_initial_admin_creation = false
 allow_embedding = true
 cookie_secure = false
@@ -60,7 +98,8 @@ EOL
 fi
 
 # Create default datasource configuration
-cat > grafana/provisioning/datasources/datasources.yaml << 'EOL'
+echo -e "${GREEN}📝 Configuring data sources...${NC}"
+sudo tee grafana/provisioning/datasources/datasources.yaml > /dev/null << 'EOL'
 apiVersion: 1
 datasources:
   - name: Prometheus
@@ -81,131 +120,38 @@ datasources:
       maxLines: 1000
 EOL
 
-echo "🚀 Starting containers with Docker Compose..."
-docker-compose down
+# Stop and remove existing containers
+echo -e "${GREEN}🛑 Stopping any running containers...${NC}"
+$DOCKER_COMPOSE_CMD down --remove-orphans
 
-echo "🔧 Building and starting containers in the background..."
-docker-compose up -d --build
+# Start the stack
+echo -e "${GREEN}🚀 Starting containers with $DOCKER_COMPOSE_CMD...${NC}"
+$DOCKER_COMPOSE_CMD up -d --build
 
-echo "⏳ Waiting for services to be ready (30 seconds)..."
+# Wait for services to be ready
+echo -e "${GREEN}⏳ Waiting for services to be ready (30 seconds)...${NC}"
 sleep 30
 
 # Check if Grafana is running
-GRAFANA_HEALTH=$(docker-compose ps -q grafana)
+GRAFANA_HEALTH=$($DOCKER_COMPOSE_CMD ps -q grafana 2>/dev/null)
 if [ -z "$GRAFANA_HEALTH" ]; then
-    echo "❌ Grafana container is not running. Please check the logs with: docker-compose logs grafana"
+    echo -e "${RED}❌ Grafana container is not running. Please check the logs with: $DOCKER_COMPOSE_CMD logs grafana${NC}"
     exit 1
 fi
 
-echo "🔄 Resetting admin password..."
-docker-compose exec -T grafana grafana-cli admin reset-admin-password "${GRAFANA_ADMIN_PASSWORD:-GrafanaSecure123!Change@Me}" || echo "⚠️  Could not reset admin password. It might already be set."
+# Reset admin password
+echo -e "${GREEN}🔄 Resetting admin password...${NC}"
+$DOCKER_COMPOSE_CMD exec -T grafana grafana-cli admin reset-admin-password "${GRAFANA_ADMIN_PASSWORD:-GrafanaSecure123!Change@Me}" || echo -e "${YELLOW}⚠️  Could not reset admin password. It might already be set.${NC}"
 
-echo "
-✅ Deployment completed successfully!
+# Show deployment info
+echo -e "\n${GREEN}✅ Deployment completed successfully!${NC}\n"
 
-📊 Access the following services:
-- Grafana:      http://localhost:3000
-  Username: admin
-  Password: ${GRAFANA_ADMIN_PASSWORD:-GrafanaSecure123!Change@Me}
-
-- Prometheus:   http://localhost:9090
-- Alertmanager: http://localhost:9093
-- Loki:         http://localhost:3100
-
-📝 To view logs, run: docker-compose logs -f
-"
-
-# Function to check if a command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-# Function to check Docker is running
-docker_running() {
-    docker info > /dev/null 2>&1
-    return $?
-}
-
-# Function to deploy with Docker Compose
-deploy_docker() {
-    echo -e "${GREEN}Starting Docker Compose deployment...${NC}"
-    
-    # Check for port conflicts
-    if command_exists lsof; then
-        if lsof -i :${EBANKING_METRICS_PORT:-9201} | grep LISTEN; then
-            echo -e "${RED}Error: Port ${EBANKING_METRICS_PORT:-9201} is already in use${NC}"
-            exit 1
-        fi
-    fi
-    
-    docker-compose pull
-    docker-compose up -d --build
-    
-    echo -e "\n${GREEN}Deployment complete!${NC}"
-    echo -e "Access Grafana at: http://localhost:${GRAFANA_PORT:-3000}"
-}
-
-# Function to deploy to Kubernetes
-deploy_kubernetes() {
-    echo -e "${GREEN}Starting Kubernetes deployment...${NC}"
-    
-    # Check kubectl is installed
-    if ! command_exists kubectl; then
-        echo -e "${RED}Error: kubectl is not installed${NC}"
-        exit 1
-    fi
-    
-    # Create namespace if it doesn't exist
-    kubectl create namespace ebanking-observability --dry-run=client -o yaml | kubectl apply -f -
-    
-    # Create secrets from .env
-    kubectl create secret generic observability-secrets \
-        --from-env-file=.env \
-        -n ebanking-observability \
-        --dry-run=client -o yaml | kubectl apply -f -
-    
-    # Apply all Kubernetes manifests
-    if [ -d "k8s" ]; then
-        kubectl apply -f k8s/
-    else
-        echo -e "${YELLOW}Warning: k8s/ directory not found. No Kubernetes resources will be deployed.${NC}"
-    fi
-    
-    echo -e "\n${GREEN}Kubernetes deployment initiated!${NC}"
-    echo -e "To access Grafana, run: kubectl port-forward svc/grafana 3000:3000 -n ebanking-observability"
-}
-
-# Main deployment function
-deploy() {
-    if ! docker_running; then
-        echo -e "${RED}Error: Docker is not running. Please start Docker and try again.${NC}"
-        exit 1
-    fi
-    
-    case "$1" in
-        docker)
-            deploy_docker
-            ;;
-        k8s|kubernetes)
-            deploy_kubernetes
-            ;;
-        all)
-            deploy_docker
-            deploy_kubernetes
-            ;;
-        *)
-            echo "Usage: $0 {docker|k8s|kubernetes|all}"
-            echo "  docker:     Deploy using Docker Compose"
-            echo "  k8s:        Deploy to Kubernetes"
-            echo "  all:        Deploy to both Docker and Kubernetes"
-            exit 1
-            ;;
-    esac
-}
-
-# Show welcome message
-echo -e "${GREEN}ODDO BHF Observability Stack Deployment${NC}"
-echo -e "======================================\n"
-
-# Start deployment
-deploy "$1"
+echo -e "${GREEN}📊 Access the following services:${NC}"
+echo -e "- Grafana:      http://localhost:3000"
+echo -e "  Username: admin"
+echo -e "  Password: ${GRAFANA_ADMIN_PASSWORD:-GrafanaSecure123!Change@Me}\n"
+echo -e "- Prometheus:   http://localhost:9090"
+echo -e "- Alertmanager: http://localhost:9093"
+echo -e "- Loki:         http://localhost:3100\n"
+echo -e "📝 To view logs, run: $DOCKER_COMPOSE_CMD logs -f"
+echo -e "🛑 To stop all services: $DOCKER_COMPOSE_CMD down\n"
