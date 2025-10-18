@@ -30,20 +30,29 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=GrafanaSecure123!Change@Me
+      - GF_SECURITY_SECRET_KEY=GrafanaSecret123!Change@Me
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION=false
       - GF_SECURITY_DISABLE_GRAVATAR=true
       - GF_SECURITY_ALLOW_EMBEDDING=true
-      - GF_SECURITY_COOKIE_SECURE=true
-      - GF_SECURITY_COOKIE_SAMESITE=none
-      - GF_SECURITY_CONTENT_SECURITY_POLICY="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'"
+      - GF_SECURITY_COOKIE_SECURE=false
+      - GF_SECURITY_COOKIE_SAMESITE=lax
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_SERVER_SERVE_FROM_SUB_PATH=false
+      - GF_DATABASE_TYPE=sqlite3
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_PATHS_CONFIG=/etc/grafana/grafana.ini
+      - GF_PATHS_DATA=/var/lib/grafana
+      - GF_PATHS_LOGS=/var/log/grafana
+    volumes:
+      - ./grafana/data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/config/grafana.ini:/etc/grafana/grafana.ini
+    user: "472:472"
     security_opt:
       - no-new-privileges:true
     depends_on:
