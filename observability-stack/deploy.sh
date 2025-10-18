@@ -132,22 +132,15 @@ EOL
 # Create a temporary container to copy files to the volumes
 echo -e "${GREEN}📦 Setting up Grafana configuration...${NC}
 
-# Create a temporary container with the volumes attached
-docker run -d --name grafana_temp \
-  -v $(basename $(pwd))_grafana_config:/etc/grafana \
-  -v $(basename $(pwd))_grafana_provisioning:/etc/grafana/provisioning \
-  busybox tail -f /dev/null
+# Create provisioning directory in config volume
+docker run --rm -v $(basename $(pwd))_grafana_config:/mnt busybox mkdir -p /mnt/provisioning
 
-# Copy the configuration files
-docker cp "$TEMP_DIR/grafana.ini" grafana_temp:/etc/grafana/
-docker cp "$TEMP_DIR/datasources.yaml" grafana_temp:/etc/grafana/provisioning/
+# Copy configuration files directly to volumes
+docker run --rm -v $TEMP_DIR/grafana.ini:/grafana.ini -v $(basename $(pwd))_grafana_config:/mnt busybox cp /grafana.ini /mnt/
+docker run --rm -v $TEMP_DIR/datasources.yaml:/datasources.yaml -v $(basename $(pwd))_grafana_config:/mnt busybox cp /datasources.yaml /mnt/provisioning/
 
 # Set proper permissions
-docker exec grafana_temp chown -R 472:472 /etc/grafana
-
-# Clean up the temporary container
-docker stop grafana_temp
-docker rm grafana_temp
+docker run --rm -v $(basename $(pwd))_grafana_config:/mnt busybox chown -R 472:472 /mnt
 
 # Clean up the temporary directory
 rm -rf "$TEMP_DIR"
@@ -161,7 +154,8 @@ echo -e "${GREEN}🚀 Starting containers with $DOCKER_COMPOSE_CMD...${NC}"
 $DOCKER_COMPOSE_CMD up -d --build
 
 # Wait for services to be ready
-echo -e "${GREEN}⏳ Waiting for services to be ready (30 seconds)...${NC}"
+echo -e "${GREEN}⏳ Waiting for services to be ready...${NC}"
+echo -e "${GREEN}This may take about 30 seconds...${NC}"
 sleep 30
 
 # Check if Grafana is running
