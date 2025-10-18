@@ -1,23 +1,119 @@
 #!/bin/bash
-set -e
+# Deploy script for Grafana Observability Stack
 
-# Colors for output
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
+echo "🚀 Starting deployment of Grafana Observability Stack..."
 
-# Check if .env exists
-if [ ! -f .env ]; then
-    echo -e "${YELLOW}Warning: .env file not found. Creating from .env.example${NC}"
+# Load environment variables
+if [ -f .env ]; then
+    echo "🔧 Loading environment variables from .env file..."
+    export $(grep -v '^#' .env | xargs)
+else
+    echo "⚠️  No .env file found. Creating from .env.example..."
     cp .env.example .env
-    echo -e "${YELLOW}Please edit .env with your configuration before continuing${NC}
-"
+    echo "ℹ️  Please update the .env file with your configuration and run the script again."
     exit 1
 fi
 
-# Load environment variables
-export $(grep -v '^#' .env | xargs)
+# Create necessary directories
+echo "📂 Creating required directories..."
+mkdir -p grafana/{data,provisioning/datasources,provisioning/dashboards,config}
+mkdir -p prometheus/rules
+
+# Set proper permissions
+echo "🔒 Setting permissions..."
+sudo chown -R 472:472 grafana/
+sudo chmod -R 775 grafana/
+
+# Create default Grafana configuration if not exists
+if [ ! -f grafana/config/grafana.ini ]; then
+    echo "📝 Creating default Grafana configuration..."
+    cat > grafana/config/grafana.ini << 'EOL'
+[server]
+root_url = %(protocol)s://%(domain)s:%(http_port)s/
+serve_from_sub_path = false
+
+[database]
+type = sqlite3
+path = /var/lib/grafana/grafana.db
+
+[security]
+admin_user = admin
+admin_password = ${GRAFANA_ADMIN_PASSWORD}
+secret_key = ${GRAFANA_SECRET_KEY}
+disable_initial_admin_creation = false
+allow_embedding = true
+cookie_secure = false
+cookie_samesite = lax
+
+[auth.anonymous]
+enabled = false
+
+[auth]
+disable_login_form = false
+disable_signout_menu = false
+
+[users]
+allow_sign_up = false
+auto_assign_org = true
+auto_assign_org_role = Editor
+EOL
+fi
+
+# Create default datasource configuration
+cat > grafana/provisioning/datasources/datasources.yaml << 'EOL'
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      maxLines: 1000
+EOL
+
+echo "🚀 Starting containers with Docker Compose..."
+docker-compose down
+
+echo "🔧 Building and starting containers in the background..."
+docker-compose up -d --build
+
+echo "⏳ Waiting for services to be ready (30 seconds)..."
+sleep 30
+
+# Check if Grafana is running
+GRAFANA_HEALTH=$(docker-compose ps -q grafana)
+if [ -z "$GRAFANA_HEALTH" ]; then
+    echo "❌ Grafana container is not running. Please check the logs with: docker-compose logs grafana"
+    exit 1
+fi
+
+echo "🔄 Resetting admin password..."
+docker-compose exec -T grafana grafana-cli admin reset-admin-password "${GRAFANA_ADMIN_PASSWORD:-GrafanaSecure123!Change@Me}" || echo "⚠️  Could not reset admin password. It might already be set."
+
+echo "
+✅ Deployment completed successfully!
+
+📊 Access the following services:
+- Grafana:      http://localhost:3000
+  Username: admin
+  Password: ${GRAFANA_ADMIN_PASSWORD:-GrafanaSecure123!Change@Me}
+
+- Prometheus:   http://localhost:9090
+- Alertmanager: http://localhost:9093
+- Loki:         http://localhost:3100
+
+📝 To view logs, run: docker-compose logs -f
+"
 
 # Function to check if a command exists
 command_exists() {
@@ -30,7 +126,7 @@ docker_running() {
     return $?
 }
 
-# Function to deploy with Docker Compomake -j$(nproc)se
+# Function to deploy with Docker Compose
 deploy_docker() {
     echo -e "${GREEN}Starting Docker Compose deployment...${NC}"
     
