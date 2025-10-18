@@ -130,7 +130,7 @@ datasources:
 EOL
 
 # Create a temporary container to copy files to the volumes
-echo -e "${GREEN}📦 Setting up Grafana configuration...${NC}
+echo -e "${GREEN}📦 Setting up Grafana configuration...${NC}"
 
 # Create provisioning directory in config volume
 docker run --rm -v $(basename $(pwd))_grafana_config:/mnt busybox mkdir -p /mnt/provisioning
