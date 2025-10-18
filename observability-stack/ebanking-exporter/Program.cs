@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -113,15 +114,25 @@ public class Startup
         app.UseMetricServer();
 
         // Health check endpoint
-        app.Map("/health", () =>
+        app.Map("/health", app =>
         {
-            return Results.Ok("OK");
+            app.Run(context =>
+            {
+                context.Response.StatusCode = 200;
+                context.Response.ContentType = "text/plain";
+                return context.Response.WriteAsync("OK");
+            });
         });
 
         // Root endpoint with info
-        app.Map("/", () =>
+        app.Map("/", app =>
         {
-            return Results.Ok("eBanking Metrics Exporter\n\nEndpoints:\n- /metrics (Prometheus metrics)\n- /health (Health check)");
+            app.Run(context =>
+            {
+                context.Response.StatusCode = 200;
+                context.Response.ContentType = "text/plain";
+                return context.Response.WriteAsync("eBanking Metrics Exporter\n\nEndpoints:\n- /metrics (Prometheus metrics)\n- /health (Health check)");
+            });
         });
     }
 }
