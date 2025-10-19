@@ -56,13 +56,14 @@ configure_influx_cli() {
         sleep 5
     done
     
-    # Configure InfluxDB CLI
+    # Configure InfluxDB CLI with correct parameter names
     $DOCKER_COMPOSE_CMD exec -T influxdb bash -c "\
-        influx config create --name default \
-        --host-url http://influxdb:8086 \
-        --org ${INFLUXDB_ORG} \
-        --token ${INFLUXDB_TOKEN} \
-        --active"
+        influx config create \
+        -n default \
+        -u http://influxdb:8086 \
+        -o ${INFLUXDB_ORG} \
+        -t ${INFLUXDB_TOKEN} \
+        -a"
     
     echo -e "${GREEN}✅ InfluxDB CLI configured successfully${NC}"
 }
