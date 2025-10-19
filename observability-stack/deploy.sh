@@ -5,7 +5,17 @@
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Load environment variables
+if [ -f .env ]; then
+    # shellcheck source=/dev/null
+    source .env
+else
+    echo -e "${RED}❌ Error: .env file not found. Please create one from .env.example${NC}"
+    exit 1
+fi
 
 echo -e "${GREEN}🚀 Starting deployment of Grafana Observability Stack...${NC}"
 
@@ -35,6 +45,27 @@ else
     echo -e "${RED}❌ Neither 'docker compose' nor 'docker-compose' is available. Please install Docker Compose.${NC}"
     exit 1
 fi
+
+# Function to configure InfluxDB CLI
+configure_influx_cli() {
+    echo -e "${BLUE}🔧 Configuring InfluxDB CLI...${NC}"
+    
+    # Wait for InfluxDB to be ready
+    until $DOCKER_COMPOSE_CMD exec -T influxdb influx ping --host http://influxdb:8086 > /dev/null 2>&1; do
+        echo -e "${YELLOW}⏳ Waiting for InfluxDB to be ready...${NC}"
+        sleep 5
+    done
+    
+    # Configure InfluxDB CLI
+    $DOCKER_COMPOSE_CMD exec -T influxdb bash -c "\
+        influx config create --name default \
+        --host-url http://influxdb:8086 \
+        --org ${INFLUXDB_ORG} \
+        --token ${INFLUXDB_TOKEN} \
+        --active"
+    
+    echo -e "${GREEN}✅ InfluxDB CLI configured successfully${NC}"
+}
 
 # Load environment variables
 if [ -f .env ]; then
@@ -160,6 +191,12 @@ rm -rf "$TEMP_DIR"
 echo -e "${GREEN}🛑 Stopping any running containers...${NC}"
 $DOCKER_COMPOSE_CMD down --remove-orphans
 
+# Start all services
+echo -e "${GREEN}🚀 Starting all services...${NC}"
+
+# Create necessary directories
+mkdir -p influxdb/{config,data,logs,backup,keys}
+
 # Start the stack
 echo -e "${GREEN}🚀 Starting containers with $DOCKER_COMPOSE_CMD...${NC}"
 $DOCKER_COMPOSE_CMD up -d --build
@@ -168,6 +205,19 @@ $DOCKER_COMPOSE_CMD up -d --build
 echo -e "${GREEN}⏳ Waiting for services to be ready...${NC}"
 echo -e "${GREEN}This may take about 30 seconds...${NC}"
 sleep 30
+
+# Check if all services are running
+SERVICES=("grafana" "prometheus" "influxdb" "loki" "payment-api")
+
+for service in "${SERVICES[@]}"; do
+    if [ -z "$($DOCKER_COMPOSE_CMD ps -q $service)" ]; then
+        echo -e "${RED}❌ $service container is not running. Please check the logs with: $DOCKER_COMPOSE_CMD logs $service${NC}"
+        exit 1
+    fi
+done
+
+# Configure InfluxDB CLI
+configure_influx_cli
 
 # Check if Grafana is running
 GRAFANA_HEALTH=$($DOCKER_COMPOSE_CMD ps -q grafana 2>/dev/null)
