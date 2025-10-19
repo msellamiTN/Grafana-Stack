@@ -193,6 +193,7 @@ services:
       - ./influxdb/logs:/var/log/influxdb    # ✅ Persistance des logs
       - ./influxdb/backup:/backup    # ✅ Persistance des sauvegardes
       - ./influxdb/keys:/root/.influxdbv2/keys    # ✅ Persistance des clés
+      - ./influxdb/init-influxdb.sh:/docker-entrypoint-initdb.d/init-influxdb.sh
       
     networks:
       - observability
