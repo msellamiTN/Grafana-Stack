@@ -180,7 +180,8 @@ async def get_payment_stats():
         )
 
 # Initialize Prometheus instrumentation
-Instrumentator().instrument(app).expose(app)
+instrumentator = Instrumentator()
+instrumentator.instrument(app).expose(app, include_in_schema=False)
 
 if __name__ == "__main__":
     import uvicorn
