@@ -183,15 +183,15 @@ services:
       - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USER:-admin}
       - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD:-InfluxSecure123!Change@Me}
       - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG:-myorg}
-      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:-mybucket}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:-payments}
       - DOCKER_INFLUXDB_INIT_RETENTION=1w
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:-my-super-secret-auth-token}
     volumes:
       - influxdb_data:/var/lib/influxdb2
     networks:
       - observability
-
-  # Payment API Mock
+      
+  # Payment API Service
   payment-api:
     build: 
       context: ./payment-api-mock
@@ -201,13 +201,24 @@ services:
     ports:
       - "8080:8080"
     environment:
+      - NODE_ENV=production
       - PORT=8080
-      - PROMETHEUS_METRICS_ENABLED=true
-      - SIMULATION_RATE=5  # Transactions per second
+      - SIMULATION_RATE=5
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN:-my-super-secret-auth-token}
+      - INFLUXDB_ORG=${INFLUXDB_ORG:-myorg}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:-payments}
     depends_on:
+      - influxdb
       - prometheus
     networks:
       - observability
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # MySQL Database
   mysql:

@@ -9,6 +9,9 @@ RUN npm install
 # Copy application code
 COPY . .
 
+# Make scripts executable
+RUN chmod +x simulate.sh
+
 # Expose the port the app runs on
 EXPOSE 8080
 

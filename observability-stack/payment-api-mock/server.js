@@ -4,11 +4,44 @@ const promClient = require('prom-client');
 const cors = require('cors');
 const morgan = require('morgan');
 const winston = require('winston');
+const { InfluxDB, Point } = require('@influxdata/influxdb-client');
 
 // Initialize Express app
 const app = express();
 const port = process.env.PORT || 8080;
 const simulationRate = parseInt(process.env.SIMULATION_RATE) || 5; // Transactions per second
+
+// InfluxDB Configuration
+const influxConfig = {
+  url: process.env.INFLUXDB_URL || 'http://influxdb:8086',
+  token: process.env.INFLUXDB_TOKEN || 'my-super-secret-auth-token',
+  org: process.env.INFLUXDB_ORG || 'myorg',
+  bucket: process.env.INFLUXDB_BUCKET || 'payments',
+};
+
+// Initialize InfluxDB client
+const influxDB = new InfluxDB({ url: influxConfig.url, token: influxConfig.token });
+const writeApi = influxDB.getWriteApi(influxConfig.org, influxConfig.bucket);
+const queryApi = influxDB.getQueryApi(influxConfig.org);
+
+// Handle InfluxDB write errors
+writeApi.on('error', (error) => {
+  console.error('InfluxDB write error:', error);
+  logger.error('InfluxDB write error', { error: error.message });
+});
+
+// Graceful shutdown for InfluxDB
+process.on('SIGTERM', () => {
+  writeApi.close()
+    .then(() => {
+      logger.info('InfluxDB write API closed');
+      process.exit(0);
+    })
+    .catch((err) => {
+      logger.error('Error closing InfluxDB', { error: err.message });
+      process.exit(1);
+    });
+});
 
 // Configure logging
 const logger = winston.createLogger({
@@ -57,8 +90,48 @@ const activePayments = new promClient.Gauge({
   help: 'Number of payments currently being processed'
 });
 
+// Write payment data to InfluxDB
+const writePaymentToInflux = async (payment, result) => {
+  try {
+    const point = new Point('payment')
+      .tag('status', result.success ? 'success' : 'failed')
+      .tag('currency', payment.currency || 'USD')
+      .tag('customer_id', payment.customerId || 'anonymous')
+      .floatField('amount', parseFloat(payment.amount))
+      .floatField('processing_time', result.processingTime)
+      .timestamp(new Date(result.timestamp));
+
+    writeApi.writePoint(point);
+    await writeApi.flush();
+  } catch (error) {
+    logger.error('Failed to write to InfluxDB', { error: error.message });
+  }
+};
+
+// Get payment statistics from InfluxDB
+const getPaymentStats = async (timeRange = '1h') => {
+  const query = `
+    from(bucket: "${influxConfig.bucket}")
+      |> range(start: -${timeRange})
+      |> filter(fn: (r) => r._measurement == "payment")
+      |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)
+  `;
+
+  try {
+    const results = [];
+    for await (const { values, tableMeta } of queryApi.iterateRows(query)) {
+      const o = tableMeta.toObject(values);
+      results.push(o);
+    }
+    return results;
+  } catch (error) {
+    logger.error('Error querying InfluxDB', { error: error.message });
+    return [];
+  }
+};
+
 // Simulate payment processing
-const processPayment = (payment) => {
+const processPayment = async (payment) => {
   const start = Date.now();
   activePayments.inc();
   
@@ -69,7 +142,7 @@ const processPayment = (payment) => {
   const isSuccess = Math.random() > 0.02;
   
   return new Promise(resolve => {
-    setTimeout(() => {
+    setTimeout(async () => {
       const duration = (Date.now() - start) / 1000;
       activePayments.dec();
       
@@ -85,6 +158,9 @@ const processPayment = (payment) => {
       // Record metrics
       paymentDuration.observe(duration);
       paymentAmount.observe({ currency: result.currency }, parseFloat(payment.amount));
+      
+      // Store in InfluxDB
+      await writePaymentToInflux(payment, result);
       
       resolve(result);
     }, processingTime);
@@ -107,6 +183,19 @@ app.get('/metrics', async (req, res) => {
   }
 });
 
+// Get payment statistics
+app.get('/api/payments/stats', async (req, res) => {
+  try {
+    const { range = '1h' } = req.query;
+    const stats = await getPaymentStats(range);
+    res.status(200).json(stats);
+  } catch (error) {
+    logger.error('Failed to get payment stats', { error: error.message });
+    res.status(500).json({ error: 'Failed to retrieve payment statistics' });
+  }
+});
+
+// Process payment
 app.post('/api/payments', async (req, res) => {
   try {
     const { amount, currency, customerId } = req.body;
@@ -116,7 +205,12 @@ app.post('/api/payments', async (req, res) => {
       return res.status(400).json({ error: 'Invalid amount' });
     }
     
-    const payment = { amount, currency, customerId };
+    const payment = { 
+      amount, 
+      currency: currency || 'USD', 
+      customerId: customerId || 'anonymous' 
+    };
+    
     const result = await processPayment(payment);
     
     if (result.success) {

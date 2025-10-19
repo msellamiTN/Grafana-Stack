@@ -12,7 +12,9 @@
     "prom-client": "^14.2.0",
     "cors": "^2.8.5",
     "morgan": "^1.10.0",
-    "winston": "^3.8.2"
+    "winston": "^3.8.2",
+    "@influxdata/influxdb-client": "^1.32.0",
+    "@influxdata/influxdb-client-apis": "^1.32.0"
   },
   "devDependencies": {
     "nodemon": "^2.0.20"
