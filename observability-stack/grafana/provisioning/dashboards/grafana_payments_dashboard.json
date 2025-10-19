@@ -1,0 +1,84 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "payments-observability",
+    "title": "Payments Observability Dashboard",
+    "tags": ["InfluxDB", "Payments", "Observability"],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "10s",
+    "style": "dark",
+    "panels": [
+      {
+        "type": "stat",
+        "title": "Total Transactions",
+        "id": 1,
+        "datasource": "InfluxDB",
+        "targets": [{
+          "query": "from(bucket: 'payments') |> range(start: -24h) |> filter(fn: (r) => r._measurement == 'payment') |> count()"
+        }],
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "none"}}
+      },
+      {
+        "type": "stat",
+        "title": "Success Rate (%)",
+        "id": 2,
+        "datasource": "InfluxDB",
+        "targets": [{
+          "query": "import "math"\nsuccess = from(bucket: 'payments') |> range(start: -24h) |> filter(fn: (r) => r.status == 'success') |> count()\nfailed = from(bucket: 'payments') |> range(start: -24h) |> filter(fn: (r) => r.status == 'failed') |> count()\njoin(tables: {success: success, failed: failed}, on: ["_time"]) |> map(fn: (r) => ({r with _value: float(v: r._value_success) / (float(v: r._value_success) + float(v: r._value_failed)) * 100.0}))"
+        }],
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+        "fieldConfig": {"defaults": {"unit": "percent", "decimals": 2}}
+      },
+      {
+        "type": "graph",
+        "title": "Payments per Minute (Last 6 Hours)",
+        "id": 3,
+        "datasource": "InfluxDB",
+        "targets": [{
+          "query": "from(bucket: 'payments') |> range(start: -6h) |> filter(fn: (r) => r._measurement == 'payment') |> aggregateWindow(every: 1m, fn: count) |> yield(name: 'count')"
+        }],
+        "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+        "fieldConfig": {"defaults": {"color": {"mode": "continuous-BlPu"}, "unit": "none"}}
+      },
+      {
+        "type": "gauge",
+        "title": "Average Processing Time (ms)",
+        "id": 4,
+        "datasource": "InfluxDB",
+        "targets": [{
+          "query": "from(bucket: 'payments') |> range(start: -24h) |> mean(column: 'processing_time') |> map(fn: (r) => ({ r with _value: r._value * 1000.0 }))"
+        }],
+        "gridPos": {"x": 0, "y": 12, "w": 6, "h": 6},
+        "fieldConfig": {"defaults": {"unit": "ms", "max": 1000, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 400}, {"color": "red", "value": 800}]}}}
+      },
+      {
+        "type": "table",
+        "title": "Top 10 Customers by Volume",
+        "id": 5,
+        "datasource": "InfluxDB",
+        "targets": [{
+          "query": "from(bucket: 'payments') |> range(start: -7d) |> group(columns: ['customer_id']) |> sum(column: 'amount') |> sort(columns: ['_value'], desc: true) |> limit(n: 10)"
+        }],
+        "gridPos": {"x": 6, "y": 12, "w": 6, "h": 6},
+        "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "red", "value": 10000}]}}}
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "type": "query",
+          "name": "customer_id",
+          "label": "Customer",
+          "datasource": "InfluxDB",
+          "query": "from(bucket: 'payments') |> range(start: -30d) |> keep(columns: ['customer_id']) |> distinct(column: 'customer_id')",
+          "refresh": 2,
+          "includeAll": true
+        }
+      ]
+    }
+  },
+  "overwrite": true
+}
