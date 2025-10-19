@@ -16,7 +16,7 @@
         "id": 1,
         "datasource": "InfluxDB",
         "targets": [{
-          "query": "from(bucket: 'payments') |> range(start: -24h) |> filter(fn: (r) => r._measurement == 'payment') |> count()"
+          "query": "from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\")\n  |> count()"
         }],
         "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
         "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "none"}}
@@ -27,7 +27,7 @@
         "id": 2,
         "datasource": "InfluxDB",
         "targets": [{
-          "query": "import "math"\nsuccess = from(bucket: 'payments') |> range(start: -24h) |> filter(fn: (r) => r.status == 'success') |> count()\nfailed = from(bucket: 'payments') |> range(start: -24h) |> filter(fn: (r) => r.status == 'failed') |> count()\njoin(tables: {success: success, failed: failed}, on: ["_time"]) |> map(fn: (r) => ({r with _value: float(v: r._value_success) / (float(v: r._value_success) + float(v: r._value_failed)) * 100.0}))"
+          "query": "success = from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\" and r.status == \"success\")\n  |> count()\n  |> yield(name: \"success\")\n\nfailed = from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\" and r.status == \"failed\")\n  |> count()\n  |> yield(name: \"failed\")\n\ntotal = from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\")\n  |> count()\n  |> map(fn: (r) => ({r with _value: (float(v: success._value) / float(v: r._value)) * 100.0}))\n  |> yield(name: \"rate\")"
         }],
         "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
         "fieldConfig": {"defaults": {"unit": "percent", "decimals": 2}}
@@ -38,7 +38,7 @@
         "id": 3,
         "datasource": "InfluxDB",
         "targets": [{
-          "query": "from(bucket: 'payments') |> range(start: -6h) |> filter(fn: (r) => r._measurement == 'payment') |> aggregateWindow(every: 1m, fn: count) |> yield(name: 'count')"
+          "query": "from(bucket: \"payments\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\")\n  |> aggregateWindow(every: 1m, fn: count, createEmpty: false)\n  |> yield(name: \"count\")"
         }],
         "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
         "fieldConfig": {"defaults": {"color": {"mode": "continuous-BlPu"}, "unit": "none"}}
@@ -49,7 +49,7 @@
         "id": 4,
         "datasource": "InfluxDB",
         "targets": [{
-          "query": "from(bucket: 'payments') |> range(start: -24h) |> mean(column: 'processing_time') |> map(fn: (r) => ({ r with _value: r._value * 1000.0 }))"
+          "query": "from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"processing_time\")\n  |> mean()\n  |> map(fn: (r) => ({r with _value: r._value * 1000.0}))"
         }],
         "gridPos": {"x": 0, "y": 12, "w": 6, "h": 6},
         "fieldConfig": {"defaults": {"unit": "ms", "max": 1000, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 400}, {"color": "red", "value": 800}]}}}
@@ -60,7 +60,7 @@
         "id": 5,
         "datasource": "InfluxDB",
         "targets": [{
-          "query": "from(bucket: 'payments') |> range(start: -7d) |> group(columns: ['customer_id']) |> sum(column: 'amount') |> sort(columns: ['_value'], desc: true) |> limit(n: 10)"
+          "query": "from(bucket: \"payments\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\")\n  |> group(columns: [\"customer_id\"])\n  |> sum()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)"
         }],
         "gridPos": {"x": 6, "y": 12, "w": 6, "h": 6},
         "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "red", "value": 10000}]}}}
@@ -73,7 +73,7 @@
           "name": "customer_id",
           "label": "Customer",
           "datasource": "InfluxDB",
-          "query": "from(bucket: 'payments') |> range(start: -30d) |> keep(columns: ['customer_id']) |> distinct(column: 'customer_id')",
+          "query": "from(bucket: \"payments\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"payment\")\n  |> keep(columns: [\"customer_id\"])\n  |> distinct(column: \"customer_id\")",
           "refresh": 2,
           "includeAll": true
         }
