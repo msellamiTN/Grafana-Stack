@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/bin/sh
 
 # Wait for InfluxDB to be ready
-until curl -s http://influxdb:8086/health; do
+until curl -s -o /dev/null http://influxdb:8086/health; do
   echo "Waiting for InfluxDB to be ready..."
   sleep 5
 done
