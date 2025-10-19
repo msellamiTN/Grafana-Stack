@@ -188,6 +188,12 @@ services:
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:-my-super-secret-auth-token}
     volumes:
       - influxdb_data:/var/lib/influxdb2
+      - ./influxdb/config:/root/.influxdbv2    # ✅ Persistance du profil CLI
+      - ./influxdb/data:/var/lib/influxdb2    # ✅ Persistance des données
+      - ./influxdb/logs:/var/log/influxdb    # ✅ Persistance des logs
+      - ./influxdb/backup:/backup    # ✅ Persistance des sauvegardes
+      - ./influxdb/keys:/root/.influxdbv2/keys    # ✅ Persistance des clés
+      
     networks:
       - observability
       

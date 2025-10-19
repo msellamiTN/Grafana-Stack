@@ -29,6 +29,22 @@ nano .env  # or use your preferred editor
 ```bash
 docker-compose up -d
 ```
+# 1. Créer l'environnement
+```bash
+mkdir -p ~/grafana-training/
+clone https://github.com/msellamiTN/Grafana-Stack.git
+cd ~/grafana-training/Grafana-Stack/observability-stack/
+```
+# 2. Lancer Grafana
+```bash
+sudo chmod +x deploy.sh
+sudo ./deploy.sh
+```
+# 3. Vérifier le démarrage
+```bash
+docker logs grafana-oddo | tail -5
+```
+# Attendu: "Server is running" ou "HTTP Server Listen"
 
 #### Option B: Kubernetes (Production)
 ```bash
