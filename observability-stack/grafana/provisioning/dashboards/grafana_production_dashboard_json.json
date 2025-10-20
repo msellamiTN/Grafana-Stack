@@ -1,0 +1,1170 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "influxdb",
+          "uid": "cf1jdpc3t5e68a"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "red",
+        "name": "New annotation",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        }
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": 5,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "doc",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [
+        "payments",
+        "documentation"
+      ],
+      "targetBlank": true,
+      "title": "Payment System Wiki",
+      "tooltip": "Link to payment system documentation",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
+  "panels": [
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "cf1jdpc3t5e68a"
+      },
+      "description": "Total revenue from successful transactions in the last 24 hours. SLA Target: EUR 200K+. Color: Red <5K | Orange 5K-20K | Green 20K+",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "dark-red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 5000
+              },
+              {
+                "color": "green",
+                "value": 20000
+              }
+            ]
+          },
+          "unit": "currencyEUR"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\" and r.status == \"success\")\n  |> sum(column: \"_value\")\n  |> map(fn: (r) => ({ _time: now(), _value: r._value }))",
+          "refId": "A"
+        }
+      ],
+      "title": "💰 Total Revenue (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "cf1jdpc3t5e68a"
+      },
+      "description": "Success rate percentage. SLA Target: ≥98%. Green ≥98% | Yellow 95-98% | Red <95%. Real-time transaction reliability",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 90
+              },
+              {
+                "color": "yellow",
+                "value": 95
+              },
+              {
+                "color": "green",
+                "value": 98
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "gaugeType": "arc",
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true,
+        "sizing": "auto",
+        "text": {}
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\")\n  |> group(columns: [\"status\"])\n  |> count()\n  |> group(columns: [])\n  |> map(fn: (r) => ({r with _dummy: \"total\"}))\n  |> pivot(rowKey: [\"_dummy\"], columnKey: [\"status\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({\n    _value: (float(v: r.success) / float(v: (r.success + r.failed))) * 100.0,\n    _time: now()\n  }))",
+          "refId": "A"
+        }
+      ],
+      "title": "✓ Success Rate (%)",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "cf1jdpc3t5e68a"
+      },
+      "description": "Average processing latency for successful transactions. SLA: Green <300ms | Yellow 300-800ms | Red >800ms. Impacts user experience",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "max": 1500,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 300
+              },
+              {
+                "color": "red",
+                "value": 800
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "gaugeType": "arc",
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true,
+        "sizing": "auto",
+        "text": {}
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"processing_time\" and r.status == \"success\")\n  |> mean(column: \"_value\")\n  |> map(fn: (r) => ({_value: r._value * 1000.0}))",
+          "refId": "A"
+        }
+      ],
+      "title": "⏱ Avg Latency (ms)",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "cf1jdpc3t5e68a"
+      },
+      "description": "Financial loss from failed transactions. Alert threshold: €500 (Yellow) | €2000 (Red). Indicates system reliability issues",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 2000
+              }
+            ]
+          },
+          "unit": "currencyEUR"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\" and r.status == \"failed\")\n  |> sum(column: \"_value\")\n  |> map(fn: (r) => ({ _time: now(), _value: r._value }))",
+          "refId": "A"
+        }
+      ],
+      "title": "✗ Failed Amount (€)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "cf1jdpc3t5e68a"
+      },
+      "description": "7-day transaction volume trend. Green line: Successful transactions | Red line: Failed transactions. Identify volume anomalies and patterns",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Count",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "success"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "failed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "last"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"payments\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\")\n  |> aggregateWindow(every: 1h, fn: count, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"status\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "📈 Transaction Volume Trend (7d)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "cf1jdpc3t5e68a"
+      },
+      "description": "Revenue distribution across payment currencies. Pie chart shows EUR/USD/GBP/CHF/JPY split. Helps identify currency exposure and risk concentration",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "unit": "currencyEUR"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 6,
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "sort": "desc",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\" and r.status == \"success\")\n  |> group(columns: [\"currency\"])\n  |> sum(column: \"_value\")\n  |> keep(columns: [\"_value\", \"currency\"])\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 5)",
+          "refId": "A"
+        }
+      ],
+      "title": "💱 Revenue by Currency",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "cf1jdpc3t5e68a"
+      },
+      "description": "Daily performance comparison: Today vs Yesterday. Table shows metrics with variation % to identify trends and anomalies. Green >10% growth | Yellow 0-10% | Red negative",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 10
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Today"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyEUR"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Yesterday"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyEUR"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "id": 7,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "query": "import array\ntoday = from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\" and r.status == \"success\")\n  |> sum()\n  |> findRecord(fn: (key) => true, idx: 0)\n\nyesterday = from(bucket: \"payments\")\n  |> range(start: -48h, stop: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\" and r.status == \"success\")\n  |> sum()\n  |> findRecord(fn: (key) => true, idx: 0)\n\nchange = (today._value - yesterday._value) / yesterday._value * 100.0\n\narray.from(rows: [\n  {Period: \"Today\", Revenue: today._value, Change: change},\n  {Period: \"Yesterday\", Revenue: yesterday._value, Change: 0.0}\n])",
+          "refId": "A"
+        }
+      ],
+      "title": "📊 Daily Comparison: Today vs Yesterday",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "cf1jdpc3t5e68a"
+      },
+      "description": "Performance metrics by geographic region. Shows volume, success rate, and transaction count. Red rows indicate underperforming regions requiring attention",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 90
+              },
+              {
+                "color": "green",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Region"
+            },
+            "properties": []
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Volume"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "id": 8,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "mean"
+          ],
+          "show": true
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._field == \"amount\")\n  |> group(columns: [\"region\", \"status\"])\n  |> count()\n  |> group(columns: [])\n  |> pivot(rowKey: [\"region\"], columnKey: [\"status\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({\n    Region: r.region,\n    Success: r.success,\n    Failed: r.failed,\n    \"Success Rate %\": (r.success / (r.success + r.failed)) * 100.0,\n    \"Total Volume\": r.success + r.failed\n  }))\n  |> sort(columns: [\"Region\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "🌍 Performance by Region",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "cf1jdpc3t5e68a"
+      },
+      "description": "Latency percentiles: P50 (median), P95 (95th percentile), P99 (tail latency). Detects SLA violations and system performance degradation. Red P99 >1000ms indicates performance issue",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 100,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 1000
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 38
+      },
+      "id": 11,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._field == \"processing_time\")\n  |> group(columns: [\"payment_method\"])\n  |> mean(column: \"_value\")\n  |> group(columns: [])\n  |> map(fn: (r) => ({\n    _value: r._value * 1000.0,\n    payment_method: r.payment_method\n  }))\n  |> sort(columns: [\"_value\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "💳 Avg Latency by Payment Method",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "cf1jdpc3t5e68a"
+      },
+      "description": "Transaction success and failure count distribution by payment method. Identifies most reliable payment channels (high success rate) vs problematic ones requiring optimization",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 100,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "success"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "failed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 38
+      },
+      "id": 12,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._field == \"amount\")\n  |> group(columns: [\"payment_method\", \"status\"])\n  |> count()\n  |> group(columns: [])\n  |> pivot(rowKey: [\"payment_method\"], columnKey: [\"status\"], valueColumn: \"_value\")",
+          "refId": "A"
+        }
+      ],
+      "title": "📊 Transaction Count by Payment Method",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "cf1jdpc3t5e68a"
+      },
+      "description": "Card brand performance metrics. Shows success rate by card type (VISA, MASTERCARD, AMEX, DISCOVER). Green >95% | Yellow 90-95% | Red <90%",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 90
+              },
+              {
+                "color": "green",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Brand"
+            },
+            "properties": []
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "id": 13,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "mean"
+          ],
+          "show": true
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "query": "\nfrom(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._field == \"amount\")\n  |> group(columns: [\"card_brand\", \"status\"])\n  |> count()\n  |> group(columns: [])\n  |> pivot(rowKey: [\"card_brand\"], columnKey: [\"status\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({\n    Brand: r.card_brand,\n    Success: r.success,\n    Failed: r.failed,\n    \"Success Rate %\": (r.success / (r.success + r.failed)) * 100.0,\n    \"Total Transactions\": r.success + r.failed\n  }))\n  |> sort(columns: [\"Brand\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "🏦 Card Brand Performance",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "cf1jdpc3t5e68a"
+      },
+      "description": "System health status panel. Shows real-time alerts: Success Rate SLA (target 98%), Latency SLA (target <300ms), Failure Rate (target <2%). Red = Alert triggered",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "center",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "decimals": 1,
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "text": "ALERT"
+                },
+                "1": {
+                  "color": "green",
+                  "text": "OK"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 58
+      },
+      "id": 14,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "last"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._field == \"amount\")\n  |> group(columns: [\"status\"])\n  |> count()\n  |> group(columns: [])\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"status\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({\n    success_rate: (float(v: r.success) / float(v: (r.success + r.failed))) * 100.0,\n    failure_rate: (float(v: r.failed) / float(v: (r.success + r.failed))) * 100.0,\n    \"SLA Status (98%)\": if (float(v: r.success) / float(v: (r.success + r.failed))) * 100.0 >= 98.0 then 1 else 0,\n    \"Failure Alert (<2%)\": if (float(v: r.failed) / float(v: (r.success + r.failed))) * 100.0 < 2.0 then 1 else 0\n  }))",
+          "refId": "A"
+        }
+      ],
+      "title": "🟢 System Health Status",
+      "type": "table"
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 42,
+  "tags": [
+    "payments",
+    "financial",
+    "production",
+    "observability",
+    "sla",
+    "payments-system"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "-24h",
+          "value": "-24h"
+        },
+        "description": "Time range for metrics analysis",
+        "includeAll": false,
+        "label": "Time Range",
+        "name": "timerange",
+        "options": [
+          {
+            "selected": true,
+            "text": "-24h",
+            "value": "-24h"
+          },
+          {
+            "selected": false,
+            "text": "-7d",
+            "value": "-7d"
+          },
+          {
+            "selected": false,
+            "text": "-30d",
+            "value": "-30d"
+          },
+          {
+            "selected": false,
+            "text": "-90d",
+            "value": "-90d"
+          }
+        ],
+        "query": "-24h,-7d,-30d,-90d",
+        "type": "custom"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m",
+      "10m",
+      "30m",
+      "1h",
+      "6h",
+      "12h",
+      "24h"
+    ]
+  },
+  "timezone": "browser",
+  "title": "💳 Payment Analytics - Production Dashboard 5",
+  "uid": "payment-analytics-prod-v2",
+  "version": 8
+}
