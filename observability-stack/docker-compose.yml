@@ -256,6 +256,20 @@ services:
     networks:
       - observability
 
+  # Grafana MCP (Metrics Collection Proxy)
+  grafana-mcp:
+    image: mcp/grafana:latest
+    container_name: grafana-mcp
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - GRAFANA_URL=http://grafana:3000
+      - GRAFANA_SERVICE_ACCOUNT_TOKEN=${GRAFANA_SERVICE_ACCOUNT_TOKEN}
+    command: -t streamable-http -addr :8000
+    networks:
+      - observability
+
 networks:
   observability:
     driver: bridge
