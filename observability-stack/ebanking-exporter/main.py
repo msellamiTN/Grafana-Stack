@@ -152,7 +152,7 @@ database_query_duration = Histogram(
     ['query_type', 'environment'],
     buckets=[0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0]
 )
-
+  
 # ============================================
 # Business Metrics (with environment label)
 # ============================================
