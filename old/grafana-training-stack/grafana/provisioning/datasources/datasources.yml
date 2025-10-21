@@ -1,0 +1,153 @@
+# ============================================
+# Grafana Data Sources - Auto Provisioning
+# Data2AI Academy Training Stack
+# ============================================
+
+apiVersion: 1
+
+datasources:
+  # ============================================
+  # Prometheus - Metrics
+  # ============================================
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+      queryTimeout: 60s
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
+    version: 1
+    uid: prometheus
+
+  # ============================================
+  # Loki - Logs
+  # ============================================
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - datasourceUid: tempo
+          matcherRegex: "traceID=(\\w+)"
+          name: TraceID
+          url: "$${__value.raw}"
+    version: 1
+    uid: loki
+
+  # ============================================
+  # Tempo - Traces
+  # ============================================
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: true
+    jsonData:
+      httpMethod: GET
+      tracesToLogs:
+        datasourceUid: loki
+        tags: ['job', 'instance', 'pod', 'namespace']
+        mappedTags: [{ key: 'service.name', value: 'service' }]
+        mapTagNamesEnabled: false
+        spanStartTimeShift: '1h'
+        spanEndTimeShift: '1h'
+        filterByTraceID: false
+        filterBySpanID: false
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags: [{ key: 'service.name', value: 'service' }, { key: 'job' }]
+        queries:
+          - name: 'Sample query'
+            query: 'sum(rate(tempo_spanmetrics_latency_bucket{$__tags}[5m]))'
+      serviceMap:
+        datasourceUid: prometheus
+      search:
+        hide: false
+      nodeGraph:
+        enabled: true
+    version: 1
+    uid: tempo
+
+  # ============================================
+  # InfluxDB - Time Series
+  # ============================================
+  - name: InfluxDB
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    editable: true
+    jsonData:
+      version: Flux
+      organization: data2ai
+      defaultBucket: training
+      tlsSkipVerify: true
+    secureJsonData:
+      token: training-token-change-me
+    version: 1
+    uid: influxdb
+
+  # ============================================
+  # PostgreSQL - Grafana Backend (for queries)
+  # ============================================
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: grafana
+    user: grafana
+    editable: true
+    jsonData:
+      sslmode: disable
+      maxOpenConns: 100
+      maxIdleConns: 100
+      connMaxLifetime: 14400
+      postgresVersion: 1500
+      timescaledb: false
+    secureJsonData:
+      password: grafana123
+    version: 1
+    uid: postgres
+
+  # ============================================
+  # MS SQL Server - E-Banking Database
+  # ============================================
+  - name: MSSQL-EBanking
+    type: mssql
+    access: proxy
+    url: mssql:1433
+    database: EBankingDB
+    user: sa
+    editable: true
+    jsonData:
+      maxOpenConns: 100
+      maxIdleConns: 100
+      connMaxLifetime: 14400
+      encrypt: false
+    secureJsonData:
+      password: EBanking@Secure123!
+    version: 1
+    uid: mssql-ebanking
+
+  # ============================================
+  # TestData - For Training Purposes
+  # ============================================
+  - name: TestData
+    type: testdata
+    access: proxy
+    editable: true
+    isDefault: false
+    jsonData:
+      csvWave:
+        timeStep: 60
+        valuesCSV: '0,0,2,2,1,1'
+    version: 1
+    uid: testdata

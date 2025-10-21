@@ -1,0 +1,75 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'ebanking-oddo-bhf'
+    environment: 'production'
+    region: 'eu-central'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Load alerting rules
+rule_files:
+  - '/etc/prometheus/rules/*.yml'
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node Exporter - System metrics
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['node_exporter:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # E-Banking Metrics Exporter (C#)
+  - job_name: 'ebanking_metrics'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['ebanking_metrics_exporter:9200']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'ebanking-exporter-001'
+
+  # Auth Service
+  - job_name: 'auth_service'
+    static_configs:
+      - targets: ['auth_service:5001']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Transaction Service
+  - job_name: 'transaction_service'
+    static_configs:
+      - targets: ['transaction_service:5002']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # KPI Service
+  - job_name: 'kpi_service'
+    static_configs:
+      - targets: ['kpi_service:5003']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Pushgateway for batch jobs
+  - job_name: 'pushgateway'
+    honor_labels: true
+    static_configs:
+      - targets: ['pushgateway:9091']
+
+  # Alertmanager self-monitoring
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']

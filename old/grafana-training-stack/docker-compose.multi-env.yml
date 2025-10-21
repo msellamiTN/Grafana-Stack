@@ -1,0 +1,130 @@
+# ============================================
+# Multi-Environment Grafana Training Stack
+# Data2AI Academy
+# ============================================
+# This compose file runs multiple eBanking exporters
+# simulating different environments:
+# - Production
+# - Staging
+# - Development
+# - Training
+# ============================================
+
+version: '3.8'
+
+networks:
+  monitoring:
+    driver: bridge
+
+services:
+  # ============================================
+  # eBanking Exporter - PRODUCTION
+  # ============================================
+  ebanking-exporter-production:
+    build:
+      context: ./ebanking-exporter
+      dockerfile: Dockerfile
+    container_name: ebanking-exporter-production
+    restart: unless-stopped
+    ports:
+      - "9201:9200"
+    environment:
+      - TZ=UTC
+      - ENVIRONMENT=production
+      - SERVICE_NAME=ebanking-api
+      - REGION=eu-west-1
+      - CLUSTER=production-cluster
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9200/metrics || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "com.data2ai.service=ebanking-exporter"
+      - "com.data2ai.environment=production"
+
+  # ============================================
+  # eBanking Exporter - STAGING
+  # ============================================
+  ebanking-exporter-staging:
+    build:
+      context: ./ebanking-exporter
+      dockerfile: Dockerfile
+    container_name: ebanking-exporter-staging
+    restart: unless-stopped
+    ports:
+      - "9202:9200"
+    environment:
+      - TZ=UTC
+      - ENVIRONMENT=staging
+      - SERVICE_NAME=ebanking-api
+      - REGION=eu-west-1
+      - CLUSTER=staging-cluster
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9200/metrics || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "com.data2ai.service=ebanking-exporter"
+      - "com.data2ai.environment=staging"
+
+  # ============================================
+  # eBanking Exporter - DEVELOPMENT
+  # ============================================
+  ebanking-exporter-development:
+    build:
+      context: ./ebanking-exporter
+      dockerfile: Dockerfile
+    container_name: ebanking-exporter-development
+    restart: unless-stopped
+    ports:
+      - "9203:9200"
+    environment:
+      - TZ=UTC
+      - ENVIRONMENT=development
+      - SERVICE_NAME=ebanking-api
+      - REGION=eu-west-1
+      - CLUSTER=development-cluster
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9200/metrics || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "com.data2ai.service=ebanking-exporter"
+      - "com.data2ai.environment=development"
+
+  # ============================================
+  # eBanking Exporter - TRAINING
+  # ============================================
+  ebanking-exporter-training:
+    build:
+      context: ./ebanking-exporter
+      dockerfile: Dockerfile
+    container_name: ebanking-exporter-training
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+    environment:
+      - TZ=UTC
+      - ENVIRONMENT=training
+      - SERVICE_NAME=ebanking-api
+      - REGION=eu-west-1
+      - CLUSTER=training-cluster
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9200/metrics || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "com.data2ai.service=ebanking-exporter"
+      - "com.data2ai.environment=training"

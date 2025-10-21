@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pratique 1 : Installation &amp; Provisioning</title>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"/>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #141619;
+            color: white;
+            overflow: hidden;
+        }
+        .grafana-orange {
+            color: #F46800;
+        }
+        .bg-grafana-dark {
+            background-color: #141619;
+        }
+        .bg-grafana-darker {
+            background-color: #0B0C0E;
+        }
+        .bg-grafana-panel {
+            background-color: #212124;
+        }
+        .border-grafana {
+            border-color: #F46800;
+        }
+        .logo-container img {
+            max-height: 80px;
+            object-fit: contain;
+        }
+        .cover-pattern {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.05;
+            background-image: url("https://www.genspark.ai/image_placeholder.png");
+            z-index: -1;
+        }
+        .slide-number {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+        .main-title {
+            font-family: 'Inter', sans-serif;
+            letter-spacing: -0.5px;
+        }
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 16px;
+            background-color: rgba(244, 104, 0, 0.15);
+            color: #F46800;
+            font-size: 14px;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+        .content-card {
+            border-left: 3px solid #F46800;
+            padding-left: 16px;
+            margin-bottom: 20px;
+        }
+        .panel {
+            background-color: #212124;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        .practice-item {
+            background-color: #212124;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 1px solid #343436;
+        }
+        .tech-component {
+            background-color: #1A1C20;
+            border: 1px solid #343436;
+            border-radius: 4px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            transition: transform 0.2s;
+        }
+        .tech-component:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        .docker-box {
+            background-color: rgba(58, 70, 84, 0.3);
+            border: 2px dashed #F46800;
+            border-radius: 4px;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="relative w-full h-full bg-grafana-dark">
+<div class="cover-pattern"></div>
+<div class="p-10">
+<!-- Header avec titre -->
+<div class="mb-6">
+<div class="flex items-center">
+<span class="tag">Exercice 1</span>
+<h1 class="main-title text-3xl text-white font-semibold">Pratique 1 : Installation &amp; Provisioning</h1>
+</div>
+<p class="text-gray-400 mt-1">Mise en place d'une stack d'observabilité complète pour E-Banking</p>
+</div>
+<!-- Contenu principal - système à deux colonnes -->
+<div class="flex">
+<!-- Colonne de gauche - Contenu textuel -->
+<div class="w-3/5 pr-8">
+<!-- Objectifs -->
+<div class="content-card">
+<h2 class="text-xl font-semibold mb-4 text-white">
+<i class="fas fa-bullseye mr-2 grafana-orange"></i> Objectifs de l'exercice
+                    </h2>
+<ul class="space-y-3 ml-4 mb-4">
+<li><i class="fas fa-check-circle text-sm mr-2 grafana-orange"></i> <span class="font-medium text-white">Installer Grafana OSS</span> avec Docker Compose</li>
+<li><i class="fas fa-check-circle text-sm mr-2 grafana-orange"></i> <span class="font-medium text-white">Configurer le provisioning automatique</span> des datasources</li>
+<li><i class="fas fa-check-circle text-sm mr-2 grafana-orange"></i> <span class="font-medium text-white">Déployer des dashboards</span> via fichiers JSON</li>
+<li><i class="fas fa-check-circle text-sm mr-2 grafana-orange"></i> <span class="font-medium text-white">Valider la configuration</span> avec des tests de connexion</li>
+</ul>
+</div>
+<!-- Informations pratiques -->
+<div class="content-card">
+<h2 class="text-xl font-semibold mb-4 text-white">
+<i class="fas fa-info-circle mr-2 grafana-orange"></i> Informations pratiques
+                    </h2>
+<div class="flex space-x-6 mb-4">
+<div class="practice-item flex-1 flex items-center">
+<i class="fas fa-clock text-2xl mr-3 grafana-orange"></i>
+<div>
+<p class="font-medium text-white">Durée</p>
+<p class="text-base text-gray-300">30 minutes</p>
+</div>
+</div>
+<div class="practice-item flex-1 flex items-center">
+<i class="fas fa-laptop-code text-2xl mr-3 grafana-orange"></i>
+<div>
+<p class="font-medium text-white">Niveau</p>
+<p class="text-base text-gray-300">Intermédiaire</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Pré-requis -->
+<div class="content-card">
+<h2 class="text-xl font-semibold mb-4 text-white">
+<i class="fas fa-tools mr-2 grafana-orange"></i> Pré-requis techniques
+                    </h2>
+<div class="bg-grafana-panel p-4 rounded-lg border border-gray-700 mb-4">
+<div class="flex items-start mb-3">
+<i class="fab fa-docker text-2xl mr-3 text-blue-400"></i>
+<div>
+<p class="font-medium text-white">Docker &amp; Docker Compose</p>
+<p class="text-sm text-gray-400">Installation locale, droits admin pour exécuter des conteneurs</p>
+</div>
+</div>
+<div class="flex items-start mb-3">
+<i class="fas fa-terminal text-2xl mr-3 text-gray-300"></i>
+<div>
+<p class="font-medium text-white">Terminal/Console</p>
+<p class="text-sm text-gray-400">Connaissances de base en ligne de commande</p>
+</div>
+</div>
+<div class="flex items-start">
+<i class="fas fa-code text-2xl mr-3 text-green-400"></i>
+<div>
+<p class="font-medium text-white">Éditeur de texte</p>
+<p class="text-sm text-gray-400">Pour modifier les fichiers YAML/JSON</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Colonne de droite - Visuels -->
+<div class="w-2/5 flex flex-col items-center justify-center">
+<!-- Docker Compose Illustration -->
+<div class="docker-box w-full mb-6">
+<h3 class="text-lg font-semibold text-center text-white mb-4">Stack d'observabilité complète</h3>
+<div class="flex justify-center">
+<i class="fab fa-docker text-4xl text-blue-400"></i>
+<span class="text-xl font-semibold mx-3 text-white">+</span>
+<i class="fas fa-file-code text-4xl text-teal-400"></i>
+</div>
+<p class="text-center text-sm mt-2 mb-4 text-gray-300">docker-compose.yml</p>
+</div>
+<!-- Composants à installer -->
+<div class="w-full">
+<h3 class="text-lg font-semibold mb-4 text-center text-white">Composants à installer</h3>
+<!-- Grafana -->
+<div class="tech-component">
+<div class="bg-grafana-darker rounded-full w-12 h-12 flex items-center justify-center mr-4">
+<i class="fas fa-chart-line text-2xl grafana-orange"></i>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-center">
+<p class="font-medium grafana-orange">Grafana OSS 10.2.3</p>
+<span class="text-xs bg-grafana-darker text-gray-300 px-2 py-1 rounded border border-gray-700">Visualisation</span>
+</div>
+<p class="text-sm text-gray-400 mt-1">Interface de dashboards et d'alerting</p>
+</div>
+</div>
+<!-- Prometheus -->
+<div class="tech-component">
+<div class="bg-grafana-darker rounded-full w-12 h-12 flex items-center justify-center mr-4">
+<i class="fas fa-database text-2xl text-red-400"></i>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-center">
+<p class="font-medium text-red-400">Prometheus 2.48.0</p>
+<span class="text-xs bg-grafana-darker text-gray-300 px-2 py-1 rounded border border-gray-700">Métriques</span>
+</div>
+<p class="text-sm text-gray-400 mt-1">Collecte et stockage des métriques</p>
+</div>
+</div>
+<!-- MySQL -->
+<div class="tech-component">
+<div class="bg-grafana-darker rounded-full w-12 h-12 flex items-center justify-center mr-4">
+<i class="fas fa-table text-2xl text-blue-400"></i>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-center">
+<p class="font-medium text-blue-400">MySQL 8.0</p>
+<span class="text-xs bg-grafana-darker text-gray-300 px-2 py-1 rounded border border-gray-700">Base de données</span>
+</div>
+<p class="text-sm text-gray-400 mt-1">Données transactionnelles e-banking</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer avec info -->
+<div class="absolute bottom-0 left-0 right-0 py-3 px-10 flex justify-between items-center border-t border-gray-800">
+<div class="text-sm text-gray-400">
+<i class="fas fa-code-branch mr-1 grafana-orange"></i> Les configurations seront gérées via GitOps pour déploiement reproductible
+</div>
+<div class="slide-number">9/18</div>
+</div>
+</div>
+</body>
+</html>

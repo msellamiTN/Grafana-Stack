@@ -1,0 +1,25 @@
+# Windsurf Configuration for Grafana MCP
+version: '1.0'
+
+servers:
+  - name: grafana-mcp
+    type: grafana
+    url: http://51.79.24.138:8081/mcp  # Update with your server's public IP if accessing remotely
+    auth:
+      type: serviceaccount
+      token: ${GRAFANA_SERVICE_ACCOUNT_TOKEN}  # Will be read from environment
+
+    # Optional: Configure which tools are enabled
+    tools:
+      - search
+      - datasource
+      - dashboard
+      - alerting
+      - prometheus
+      - loki
+
+    # Optional: Configure timeouts (in seconds)
+    timeout: 30
+
+    # Optional: Enable debug logging
+    debug: false

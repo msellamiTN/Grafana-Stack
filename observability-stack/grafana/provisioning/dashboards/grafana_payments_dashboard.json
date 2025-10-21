@@ -1,0 +1,84 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "payments-observability",
+    "title": "Payments Observability Dashboard",
+    "tags": ["InfluxDB", "Payments", "Observability"],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "10s",
+    "style": "dark",
+    "panels": [
+      {
+        "type": "stat",
+        "title": "Total Transactions",
+        "id": 1,
+        "datasource": "InfluxDB",
+        "targets": [{
+          "query": "from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\")\n  |> count()"
+        }],
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "none"}}
+      },
+      {
+        "type": "stat",
+        "title": "Success Rate (%)",
+        "id": 2,
+        "datasource": "InfluxDB",
+        "targets": [{
+          "query": "success = from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\" and r.status == \"success\")\n  |> count()\n  |> yield(name: \"success\")\n\nfailed = from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\" and r.status == \"failed\")\n  |> count()\n  |> yield(name: \"failed\")\n\ntotal = from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\")\n  |> count()\n  |> map(fn: (r) => ({r with _value: (float(v: success._value) / float(v: r._value)) * 100.0}))\n  |> yield(name: \"rate\")"
+        }],
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+        "fieldConfig": {"defaults": {"unit": "percent", "decimals": 2}}
+      },
+      {
+        "type": "graph",
+        "title": "Payments per Minute (Last 6 Hours)",
+        "id": 3,
+        "datasource": "InfluxDB",
+        "targets": [{
+          "query": "from(bucket: \"payments\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\")\n  |> aggregateWindow(every: 1m, fn: count, createEmpty: false)\n  |> yield(name: \"count\")"
+        }],
+        "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+        "fieldConfig": {"defaults": {"color": {"mode": "continuous-BlPu"}, "unit": "none"}}
+      },
+      {
+        "type": "gauge",
+        "title": "Average Processing Time (ms)",
+        "id": 4,
+        "datasource": "InfluxDB",
+        "targets": [{
+          "query": "from(bucket: \"payments\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"processing_time\")\n  |> mean()\n  |> map(fn: (r) => ({r with _value: r._value * 1000.0}))"
+        }],
+        "gridPos": {"x": 0, "y": 12, "w": 6, "h": 6},
+        "fieldConfig": {"defaults": {"unit": "ms", "max": 1000, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 400}, {"color": "red", "value": 800}]}}}
+      },
+      {
+        "type": "table",
+        "title": "Top 10 Customers by Volume",
+        "id": 5,
+        "datasource": "InfluxDB",
+        "targets": [{
+          "query": "from(bucket: \"payments\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == \"payment\" and r._field == \"amount\")\n  |> group(columns: [\"customer_id\"])\n  |> sum()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)"
+        }],
+        "gridPos": {"x": 6, "y": 12, "w": 6, "h": 6},
+        "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "red", "value": 10000}]}}}
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "type": "query",
+          "name": "customer_id",
+          "label": "Customer",
+          "datasource": "InfluxDB",
+          "query": "from(bucket: \"payments\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"payment\")\n  |> keep(columns: [\"customer_id\"])\n  |> distinct(column: \"customer_id\")",
+          "refresh": 2,
+          "includeAll": true
+        }
+      ]
+    }
+  },
+  "overwrite": true
+}

@@ -1,0 +1,175 @@
+# ============================================
+# Prometheus Alert Rules - Training Stack
+# Data2AI Academy
+# ============================================
+
+groups:
+  # ============================================
+  # System Health Alerts
+  # ============================================
+  - name: system_health
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} on {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 80% (current value: {{ $value }}%)"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 85% (current value: {{ $value }}%)"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+          category: capacity
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk {{ $labels.mountpoint }} has less than 15% free space (current: {{ $value }}%)"
+
+  # ============================================
+  # Grafana Health Alerts
+  # ============================================
+  - name: grafana_health
+    interval: 30s
+    rules:
+      - alert: GrafanaDown
+        expr: up{job="grafana"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Grafana is down"
+          description: "Grafana has been down for more than 1 minute."
+
+      - alert: GrafanaHighResponseTime
+        expr: grafana_http_request_duration_seconds_sum / grafana_http_request_duration_seconds_count > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Grafana high response time"
+          description: "Grafana average response time is above 1 second (current: {{ $value }}s)"
+
+  # ============================================
+  # Prometheus Health Alerts
+  # ============================================
+  - name: prometheus_health
+    interval: 30s
+    rules:
+      - alert: PrometheusTargetDown
+        expr: up{job="prometheus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Prometheus target is down"
+          description: "Prometheus target {{ $labels.instance }} is down."
+
+      - alert: PrometheusTSDBCompactionsFailing
+        expr: rate(prometheus_tsdb_compactions_failed_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          category: reliability
+        annotations:
+          summary: "Prometheus TSDB compactions are failing"
+          description: "Prometheus has {{ $value }} compaction failures."
+
+      - alert: PrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 5m
+        labels:
+          severity: warning
+          category: configuration
+        annotations:
+          summary: "Prometheus configuration reload failed"
+          description: "Prometheus configuration reload has failed."
+
+  # ============================================
+  # Container Health Alerts
+  # ============================================
+  - name: container_health
+    interval: 30s
+    rules:
+      - alert: ContainerHighCPU
+        expr: rate(container_cpu_usage_seconds_total{name!=""}[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Container {{ $labels.name }} high CPU usage"
+          description: "Container CPU usage is above 80% (current: {{ $value }}%)"
+
+      - alert: ContainerHighMemory
+        expr: (container_memory_usage_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""}) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Container {{ $labels.name }} high memory usage"
+          description: "Container memory usage is above 85% (current: {{ $value }}%)"
+
+      - alert: ContainerRestarting
+        expr: rate(container_last_seen{name!=""}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          category: reliability
+        annotations:
+          summary: "Container {{ $labels.name }} is restarting"
+          description: "Container has restarted {{ $value }} times in the last 5 minutes."
+
+  # ============================================
+  # Training-Specific Alerts
+  # ============================================
+  - name: training_alerts
+    interval: 30s
+    rules:
+      - alert: TrainingStackHealthy
+        expr: count(up{job=~"grafana|prometheus|loki|tempo"} == 1) == 4
+        for: 1m
+        labels:
+          severity: info
+          category: training
+        annotations:
+          summary: "Training stack is healthy"
+          description: "All core training services are running properly."
+
+      - alert: DataSourceUnavailable
+        expr: up{job=~"prometheus|loki|tempo|influxdb"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          category: training
+        annotations:
+          summary: "Data source {{ $labels.job }} unavailable"
+          description: "Training data source {{ $labels.job }} has been unavailable for 2 minutes."

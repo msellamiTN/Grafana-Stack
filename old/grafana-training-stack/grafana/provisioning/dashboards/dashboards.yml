@@ -1,0 +1,79 @@
+# ============================================
+# Grafana Dashboards - Auto Provisioning
+# Data2AI Academy Training Stack
+# ============================================
+
+apiVersion: 1
+
+providers:
+  # System Dashboards
+  - name: 'System Monitoring'
+    orgId: 1
+    folder: 'System'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/system
+      foldersFromFilesStructure: false
+
+  # Training Module 1 Dashboards
+  - name: 'Module 1 - Fundamentals'
+    orgId: 1
+    folder: 'Training/Module 1'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/module1
+      foldersFromFilesStructure: false
+
+  # Training Module 2 Dashboards
+  - name: 'Module 2 - Data Sources'
+    orgId: 1
+    folder: 'Training/Module 2'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/module2
+      foldersFromFilesStructure: false
+
+  # Training Module 3 Dashboards
+  - name: 'Module 3 - Best Practices'
+    orgId: 1
+    folder: 'Training/Module 3'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/module3
+      foldersFromFilesStructure: false
+
+  # Training Module 4 Dashboards
+  - name: 'Module 4 - Organization'
+    orgId: 1
+    folder: 'Training/Module 4'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/module4
+      foldersFromFilesStructure: false
+
+  # Training Module 5 Dashboards
+  - name: 'Module 5 - Advanced'
+    orgId: 1
+    folder: 'Training/Module 5'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/module5
+      foldersFromFilesStructure: false

@@ -1,0 +1,82 @@
+# ============================================
+# Grafana Training Stack - Git Ignore
+# ============================================
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Secrets
+*.key
+*.pem
+*.crt
+*.p12
+secrets/
+
+# Data Directories
+data/
+volumes/
+*.db
+*.sqlite
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Backups
+backups/
+*.backup
+*.bak
+*.tar.gz
+*.zip
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
+
+# OS Files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Grafana
+grafana/data/
+grafana/*.db
+
+# Prometheus
+prometheus/data/
+
+# InfluxDB
+influxdb/data/
+
+# Node Modules (if any)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+ENV/
+
+# Training Materials (if sensitive)
+# Uncomment if you don't want to commit solutions
+# training/solutions/
