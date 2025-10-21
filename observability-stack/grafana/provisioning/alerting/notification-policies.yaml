@@ -1,0 +1,39 @@
+# Grafana Notification Policies Configuration
+# This file defines routing rules for alerts
+
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: slack-notifications
+    group_by: ['alertname', 'cluster', 'service']
+    group_wait: 10s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      # Route critical alerts to both Slack and Email
+      - receiver: critical-alerts
+        matchers:
+          - severity = critical
+        group_wait: 5s
+        group_interval: 2m
+        repeat_interval: 1h
+        continue: false
+      
+      # Route warning alerts to Slack only
+      - receiver: slack-notifications
+        matchers:
+          - severity = warning
+        group_wait: 30s
+        group_interval: 10m
+        repeat_interval: 12h
+        continue: false
+      
+      # Route info alerts to Email only
+      - receiver: email-notifications
+        matchers:
+          - severity = info
+        group_wait: 1m
+        group_interval: 30m
+        repeat_interval: 24h
+        continue: false

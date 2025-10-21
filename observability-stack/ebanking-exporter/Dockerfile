@@ -1,21 +1,16 @@
-# Build stage
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS builder
+FROM python:3.11-slim
 
 WORKDIR /app
-COPY *.csproj ./
-RUN dotnet restore
 
-COPY . ./
-RUN dotnet publish -c Release -o out --self-contained true --runtime linux-x64 /p:PublishSingleFile=true /p:PublishTrimmed=true
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Runtime stage
-FROM mcr.microsoft.com/dotnet/runtime:8.0-alpine
+# Copy application
+COPY main.py .
 
-RUN apk add --no-cache icu-libs
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
-
-WORKDIR /app
-COPY --from=builder /app/out .
-
+# Expose metrics port
 EXPOSE 9200
-ENTRYPOINT ["./ebanking-exporter"]
+
+# Run the exporter
+CMD ["python", "-u", "main.py"]
