@@ -14,9 +14,9 @@ contactPoints:
           # Slack webhook for PayementService app (BHF-ODDO-Grafana workspace)
           # IMPORTANT: Replace with your actual webhook URL before deploying
           # Get from: https://api.slack.com/apps/A09MQ4WMJVA/incoming-webhooks
+          # NOTE: When using webhooks, do NOT specify 'recipient' or 'token'
+          # The channel is configured in the webhook URL itself
           url: ${SLACK_WEBHOOK_URL:-https://hooks.slack.com/services/YOUR/WEBHOOK/URL}
-          # REQUIRED: Slack channel or user
-          recipient: '#alerts'
           # Optional: Customize the message
           title: "{{ .CommonLabels.alertname }}"
           text: |
@@ -51,9 +51,8 @@ contactPoints:
       - uid: critical-slack
         type: slack
         settings:
+          # NOTE: When using webhooks, do NOT specify 'recipient' or 'token'
           url: ${SLACK_WEBHOOK_URL:-https://hooks.slack.com/services/YOUR/WEBHOOK/URL}
-          # REQUIRED: Slack channel or user
-          recipient: '#critical-alerts'
           title: "🚨 CRITICAL: {{ .CommonLabels.alertname }}"
           text: |
             *CRITICAL ALERT*
