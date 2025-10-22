@@ -292,12 +292,33 @@ services:
       - ./mssql/init:/docker-entrypoint-initdb.d
       - ./mssql/scripts:/scripts
       - ./mssql/backup:/backup
+    entrypoint: /bin/bash
+    command: >
+      -c "
+      /opt/mssql/bin/sqlservr &
+      echo 'Waiting for SQL Server to start...'
+      sleep 30s
+      echo 'Initializing database...'
+      for script in /docker-entrypoint-initdb.d/*.sql; do
+        if [ -f \"$$script\" ]; then
+          echo \"Executing: $$(basename $$script)\"
+          /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -i \"$$script\"
+          if [ $$? -eq 0 ]; then
+            echo \"✓ $$(basename $$script) executed successfully\"
+          else
+            echo \"✗ Error executing $$(basename $$script)\"
+          fi
+        fi
+      done
+      echo 'Database initialization completed!'
+      wait
+      "
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $${MSSQL_SA_PASSWORD} -Q 'SELECT 1' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 60s
     networks:
       - observability
 

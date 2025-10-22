@@ -41,10 +41,11 @@ datasources:
     uid: mssql_ebanking
     version: 1
     secureJsonData:
-      password: ${MSSQL_SA_PASSWORD:-EBanking@Secure123!}
+      password: 'EBanking@Secure123!'
     jsonData:
       maxOpenConns: 100
       maxIdleConns: 100
       connMaxLifetime: 14400
       encrypt: 'false'
       sslmode: 'disable'
+      authenticator: 'SQL Server Authentication'
