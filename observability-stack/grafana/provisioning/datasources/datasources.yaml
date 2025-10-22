@@ -34,7 +34,7 @@ datasources:
     type: mssql
     access: proxy
     url: mssql:1433
-    database: master
+    database: EBankingDB
     user: sa
     isDefault: false
     editable: true
