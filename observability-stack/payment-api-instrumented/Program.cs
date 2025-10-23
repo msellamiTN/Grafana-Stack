@@ -5,6 +5,8 @@ using OpenTelemetry.Trace;
 using PaymentApi.Services;
 using Serilog;
 using Serilog.Formatting.Compact;
+using OpenTelemetry.Instrumentation.Runtime;
+using OpenTelemetry.Instrumentation.Process;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,7 +15,6 @@ Log.Logger = new LoggerConfiguration()
     .Enrich.FromLogContext()
     .Enrich.WithEnvironmentName()
     .Enrich.WithMachineName()
-    .Enrich.WithSpan()
     .WriteTo.Console(new CompactJsonFormatter())
     .CreateLogger();
 

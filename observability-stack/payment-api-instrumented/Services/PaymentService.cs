@@ -77,7 +77,7 @@ public class PaymentService
             
             if (processingResult.Status == "success")
             {
-                _paymentAmountCounter.Add(request.Amount, tags);
+                _paymentAmountCounter.Add((double)request.Amount, tags);
             }
 
             // Record processing time histogram

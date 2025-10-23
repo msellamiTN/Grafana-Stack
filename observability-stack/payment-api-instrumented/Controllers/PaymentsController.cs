@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using PaymentApi.Models;
 using PaymentApi.Services;
 using System.Diagnostics;
+using OpenTelemetry.Trace;
 
 namespace PaymentApi.Controllers;
 
