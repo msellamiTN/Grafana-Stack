@@ -140,7 +140,7 @@ services:
       retries: 3
       start_period: 40s
 
-  eBanking Metrics Exporter
+  # eBanking Metrics Exporter
   ebanking_metrics_exporter:
     build: ./ebanking-exporter
     container_name: ebanking_metrics_exporter
