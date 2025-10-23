@@ -92,11 +92,11 @@ services:
       - loki
     networks:
       - observability
-  payment-api:
+  payment-api_instrumented:
     build:
       context: ../payment-api
       dockerfile: Dockerfile
-    container_name: payment-api
+    container_name: payment-api_instrumented
     restart: unless-stopped
     ports:
       - "8081:8080"
