@@ -117,7 +117,7 @@ services:
 
   payment-api_instrumented:
     build:
-      context: ../payment-api-instrumented
+      context: ./payment-api-instrumented
       dockerfile: Dockerfile
     container_name: payment-api_instrumented
     restart: unless-stopped
