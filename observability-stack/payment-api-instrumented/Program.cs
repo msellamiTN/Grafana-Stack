@@ -2,7 +2,6 @@ using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
-using OpenTelemetry.Trace.Samplers;
 using PaymentApi.Services;
 using Serilog;
 using Serilog.Formatting.Compact;
