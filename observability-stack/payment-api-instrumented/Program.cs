@@ -37,6 +37,9 @@ var serviceName = "payment-api-instrumented";
 var serviceVersion = "1.0.0";
 var serviceInstanceId = Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName;
 
+// Register ActivitySource
+var activitySource = new System.Diagnostics.ActivitySource(serviceName);
+
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource
         .AddService(
@@ -94,9 +97,11 @@ builder.Services.AddOpenTelemetry()
             options.RecordException = true;
         })
         .AddSource(serviceName)
+        .AddConsoleExporter() // Debug: verify traces are being created
         .AddOtlpExporter(options =>
         {
             options.Endpoint = new Uri(builder.Configuration["OpenTelemetry:OtlpEndpoint"] ?? "http://tempo:4317");
+            options.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
         }))
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()

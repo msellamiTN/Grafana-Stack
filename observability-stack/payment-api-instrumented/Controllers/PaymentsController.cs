@@ -12,7 +12,7 @@ public class PaymentsController : ControllerBase
 {
     private readonly PaymentService _paymentService;
     private readonly ILogger<PaymentsController> _logger;
-    private static readonly ActivitySource ActivitySource = new("PaymentApi");
+    private static readonly ActivitySource ActivitySource = new("payment-api-instrumented");
 
     public PaymentsController(PaymentService paymentService, ILogger<PaymentsController> logger)
     {
