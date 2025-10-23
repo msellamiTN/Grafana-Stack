@@ -3,12 +3,14 @@
 ## Overview
 This document outlines the observability design patterns implemented in the payment-api-instrumented service following OpenTelemetry semantic conventions and industry best practices.
 
+**Note**: This service is distinct from `payment-api` (business KPI service). See `SERVICE-COMPARISON.md` for details.
+
 ## Resource Attributes
 
 ### Service Identification
-- **service.name**: `payment-api` - Unique service identifier
+- **service.name**: `payment-api-instrumented` - Unique service identifier
 - **service.version**: `1.0.0` - Semantic versioning
-- **service.namespace**: `ebanking` - Logical grouping of services
+- **service.namespace**: `ebanking.observability` - Logical grouping for observability demo services
 - **service.instance.id**: Container hostname - Unique instance identifier
 
 ### Deployment Context
@@ -33,6 +35,8 @@ This document outlines the observability design patterns implemented in the paym
 - **app.team**: `platform-engineering` - Owning team
 - **app.owner**: `observability-team` - Service owner
 - **app.tier**: `backend` - Application tier
+- **app.type**: `instrumented-demo` - Application type
+- **app.purpose**: `observability-testing` - Primary purpose
 
 ## Telemetry Signals
 
@@ -104,25 +108,25 @@ This document outlines the observability design patterns implemented in the paym
 
 ## Query Patterns
 
-### Find traces for a specific service
+### Find traces for instrumented service
 ```
-{service.name="payment-api"}
+{service.name="payment-api-instrumented"}
 ```
 
 ### Find traces with errors in production
 ```
-{service.name="payment-api" && deployment.environment="production" && status=error}
+{service.name="payment-api-instrumented" && deployment.environment="production" && status=error}
 ```
 
 ### Find logs for a specific trace
 ```
-{ServiceName="payment-api"} | json | trace_id="<trace-id>"
+{ServiceName="payment-api-instrumented"} | json | trace_id="<trace-id>"
 ```
 
 ### Service graph metrics
 ```
-traces_service_graph_request_total{client="payment-api"}
-traces_spanmetrics_latency_bucket{service_name="payment-api"}
+traces_service_graph_request_total{client="payment-api-instrumented"}
+traces_spanmetrics_latency_bucket{service_name="payment-api-instrumented"}
 ```
 
 ## Dimensions for Analysis
@@ -157,9 +161,10 @@ traces_spanmetrics_latency_bucket{service_name="payment-api"}
 All observability metadata can be configured via environment variables:
 
 ```yaml
-SERVICE_NAME=payment-api
+SERVICE_NAME=payment-api-instrumented
 SERVICE_VERSION=1.0.0
-SERVICE_NAMESPACE=ebanking
+SERVICE_NAMESPACE=ebanking.observability
+SERVICE_PURPOSE=observability-testing
 DEPLOYMENT_ENVIRONMENT=production
 DEPLOYMENT_REGION=on-premise
 CLUSTER_NAME=observability-stack
