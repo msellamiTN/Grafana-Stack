@@ -2,6 +2,7 @@ using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using OpenTelemetry.Trace.Samplers;
 using PaymentApi.Services;
 using Serilog;
 using Serilog.Formatting.Compact;
@@ -97,11 +98,16 @@ builder.Services.AddOpenTelemetry()
             options.RecordException = true;
         })
         .AddSource(serviceName)
+        .SetSampler(new AlwaysOnSampler()) // Ensure all traces are sampled
         .AddConsoleExporter() // Debug: verify traces are being created
         .AddOtlpExporter(options =>
         {
-            options.Endpoint = new Uri(builder.Configuration["OpenTelemetry:OtlpEndpoint"] ?? "http://tempo:4317");
+            var endpoint = builder.Configuration["OpenTelemetry:OtlpEndpoint"] ?? "http://tempo:4317";
+            options.Endpoint = new Uri(endpoint);
             options.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+            
+            // Log the endpoint for debugging
+            Console.WriteLine($"[OpenTelemetry] OTLP Exporter configured with endpoint: {endpoint}");
         }))
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
