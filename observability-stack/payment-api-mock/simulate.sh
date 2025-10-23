@@ -3,8 +3,9 @@
 # Configuration
 API_URL="http://localhost:8080/api/payments"
 NUM_REQUESTS=${1:-100}  # Default 100, can be overridden
-SIMULATION_MODE=${2:-"normal"}  # normal, burst, peak, stress, realistic
+SIMULATION_MODE=${2:-"normal"}  # normal, burst, peak, stress, realistic, failure
 MAX_CONCURRENT=${3:-5}  # Maximum concurrent requests
+FAILURE_RATE=${4:-30}  # Percentage of intentional failures (for failure mode)
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -20,9 +21,24 @@ TOTAL_AMOUNT=0
 
 # Function to generate a random amount based on distribution
 random_amount() {
-    # Use 0.0 to let API generate realistic distribution
-    # 80% < 200€, 15% 200-1000€, 5% > 1000€
-    echo "0.0"
+    local mode=$1
+    if [ "$mode" = "failure" ]; then
+        # Generate amounts that might trigger failures
+        local rand=$((RANDOM % 100))
+        if [ $rand -lt 20 ]; then
+            echo "-10.50"  # Negative amount
+        elif [ $rand -lt 40 ]; then
+            echo "0"  # Zero amount
+        elif [ $rand -lt 60 ]; then
+            echo "999999.99"  # Extremely high amount
+        else
+            echo "0.0"  # Normal amount
+        fi
+    else
+        # Use 0.0 to let API generate realistic distribution
+        # 80% < 200€, 15% 200-1000€, 5% > 1000€
+        echo "0.0"
+    fi
 }
 
 # Function to generate specific amount for testing
@@ -46,33 +62,65 @@ specific_amount() {
 
 # Function to generate a random currency
 random_currency() {
-    currencies=("EUR" "USD" "GBP" "CHF" "JPY")
-    weights=(50 25 15 7 3)  # Percentage weights
-    rand=$((RANDOM % 100))
-    
-    if [ $rand -lt 50 ]; then
-        echo "EUR"
-    elif [ $rand -lt 75 ]; then
-        echo "USD"
-    elif [ $rand -lt 90 ]; then
-        echo "GBP"
-    elif [ $rand -lt 97 ]; then
-        echo "CHF"
+    local mode=$1
+    if [ "$mode" = "failure" ]; then
+        # Mix valid and invalid currencies
+        local rand=$((RANDOM % 100))
+        if [ $rand -lt 30 ]; then
+            echo "XXX"  # Invalid currency
+        elif [ $rand -lt 50 ]; then
+            echo ""  # Empty currency
+        elif [ $rand -lt 60 ]; then
+            echo "INVALID"
+        else
+            # Valid currencies
+            currencies=("EUR" "USD" "GBP" "CHF" "JPY")
+            echo "${currencies[$((RANDOM % ${#currencies[@]}))]}"
+        fi
     else
-        echo "JPY"
+        currencies=("EUR" "USD" "GBP" "CHF" "JPY")
+        weights=(50 25 15 7 3)  # Percentage weights
+        rand=$((RANDOM % 100))
+        
+        if [ $rand -lt 50 ]; then
+            echo "EUR"
+        elif [ $rand -lt 75 ]; then
+            echo "USD"
+        elif [ $rand -lt 90 ]; then
+            echo "GBP"
+        elif [ $rand -lt 97 ]; then
+            echo "CHF"
+        else
+            echo "JPY"
+        fi
     fi
 }
 
 # Function to generate a random customer ID with realistic distribution
 random_customer() {
-    # 20% returning customers (lower IDs), 80% various customers
-    rand=$((RANDOM % 100))
-    if [ $rand -lt 20 ]; then
-        # Returning customers
-        printf "cust_%05d" $(shuf -i 1-100 -n 1)
+    local mode=$1
+    if [ "$mode" = "failure" ]; then
+        # Generate problematic customer IDs
+        local rand=$((RANDOM % 100))
+        if [ $rand -lt 20 ]; then
+            echo ""  # Empty customer ID
+        elif [ $rand -lt 40 ]; then
+            echo "blocked_customer_001"  # Blocked customer
+        elif [ $rand -lt 60 ]; then
+            echo "fraud_risk_999"  # Fraud risk customer
+        else
+            printf "cust_%05d" $(shuf -i 1-5000 -n 1)
+        fi
     else
-        # Regular customers
-        printf "cust_%05d" $(shuf -i 1-5000 -n 1)
+        # 20% returning customers (lower IDs), 80% various customers
+        rand=$((RANDOM % 100))
+        if [ $rand -lt 20 ]; then
+            # Returning customers
+            printf "cust_%05d" $(shuf -i 1-100 -n 1)
+        else
+            # Regular customers
+            printf "cust_%05d" $(shuf -i 1-5000 -n 1)
+        fi
     fi
 }
 
@@ -108,11 +156,50 @@ make_payment() {
     local currency=$2
     local customer=$3
     local request_num=$4
+    local force_malformed=$5
     
     start_time=$(date +%s.%N)
-    response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
-        -H "Content-Type: application/json" \
-        -d "{\"amount\":$amount,\"currency\":\"$currency\",\"customer_id\":\"$customer\"}" 2>/dev/null)
+    
+    # Generate malformed requests for failure testing
+    if [ "$force_malformed" = "true" ]; then
+        local rand=$((RANDOM % 5))
+        case $rand in
+            0)
+                # Missing required fields
+                response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"currency\":\"$currency\"}" 2>/dev/null)
+                ;;
+            1)
+                # Invalid JSON
+                response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
+                    -H "Content-Type: application/json" \
+                    -d "{amount:$amount,currency:$currency" 2>/dev/null)
+                ;;
+            2)
+                # Wrong content type
+                response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
+                    -H "Content-Type: text/plain" \
+                    -d "amount=$amount&currency=$currency" 2>/dev/null)
+                ;;
+            3)
+                # Timeout simulation (very large payload)
+                response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"amount\":$amount,\"currency\":\"$currency\",\"customer_id\":\"$customer\",\"description\":\"$(head -c 10000 < /dev/zero | tr '\0' 'x')\"}" 2>/dev/null)
+                ;;
+            *)
+                # Duplicate transaction ID
+                response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"amount\":$amount,\"currency\":\"$currency\",\"customer_id\":\"$customer\",\"idempotency_key\":\"duplicate_001\"}" 2>/dev/null)
+                ;;
+        esac
+    else
+        response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"amount\":$amount,\"currency\":\"$currency\",\"customer_id\":\"$customer\"}" 2>/dev/null)
+    fi
     
     http_code=$(echo "$response" | tail -n1)
     response_body=$(echo "$response" | head -n-1)
@@ -127,7 +214,11 @@ make_payment() {
         echo -e "[${request_num}] ${GREEN}✓${NC} Payment $payment_id | ${amount_paid} $currency | Customer: $customer | ${duration}s"
     else
         TOTAL_FAILED=$((TOTAL_FAILED + 1))
-        echo -e "[${request_num}] ${RED}✗${NC} HTTP $http_code | $amount $currency | Customer: $customer | ${duration}s"
+        error_msg=$(echo "$response_body" | grep -o '"detail":"[^"]*"' | cut -d'"' -f4)
+        if [ -z "$error_msg" ]; then
+            error_msg="Unknown error"
+        fi
+        echo -e "[${request_num}] ${RED}✗${NC} HTTP $http_code | $amount $currency | Customer: $customer | Error: $error_msg | ${duration}s"
     fi
 }
 
@@ -251,6 +342,34 @@ case $SIMULATION_MODE in
         done
         ;;
     
+    "failure")
+        echo -e "${RED}💣 Running FAILURE mode (high error rate testing)${NC}"
+        echo -e "${RED}Target failure rate: ${FAILURE_RATE}%${NC}\n"
+        for ((i=1; i<=NUM_REQUESTS; i++)); do
+            # Determine if this request should fail
+            should_fail=$((RANDOM % 100))
+            if [ $should_fail -lt $FAILURE_RATE ]; then
+                # Generate problematic request
+                amount=$(random_amount "failure")
+                currency=$(random_currency "failure")
+                customer=$(random_customer "failure")
+                # 50% chance of malformed request
+                if [ $((RANDOM % 2)) -eq 0 ]; then
+                    make_payment "$amount" "$currency" "$customer" "$i" "true"
+                else
+                    make_payment "$amount" "$currency" "$customer" "$i" "false"
+                fi
+            else
+                # Normal request
+                amount=$(random_amount)
+                currency=$(random_currency)
+                customer=$(random_customer)
+                make_payment "$amount" "$currency" "$customer" "$i" "false"
+            fi
+            sleep $(get_delay "normal")
+        done
+        ;;
+    
     *)
         echo -e "${YELLOW}⚙️  Running NORMAL mode (standard traffic)${NC}\n"
         for ((i=1; i<=NUM_REQUESTS; i++)); do
@@ -271,6 +390,9 @@ ELAPSED=$((END_TIME - START_TIME))
 show_stats $ELAPSED
 
 echo -e "\n${GREEN}✅ Simulation completed!${NC}"
-echo -e "\nUsage: $0 [num_requests] [mode] [max_concurrent]"
-echo -e "Modes: normal, burst, peak, stress, realistic"
-echo -e "Example: $0 500 peak 10\n"
+echo -e "\nUsage: $0 [num_requests] [mode] [max_concurrent] [failure_rate]"
+echo -e "Modes: normal, burst, peak, stress, realistic, failure"
+echo -e "Examples:"
+echo -e "  $0 500 peak 10          # Peak mode with 500 requests"
+echo -e "  $0 200 failure 5 50     # Failure mode with 50% error rate"
+echo -e "  $0 100 stress 20        # Stress test with 20 concurrent\n"

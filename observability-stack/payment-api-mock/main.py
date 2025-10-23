@@ -161,9 +161,9 @@ async def process_payment(payment: PaymentRequest):
 
     # Determine status
     r = random.random()
-    if r < 0.97:
+    if r < 0.84:
         status = "success"
-    elif r < 0.99:
+    elif r < 0.85:
         status = "failed"
     else:
         status = "pending"
