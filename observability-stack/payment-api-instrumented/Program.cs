@@ -15,6 +15,12 @@ Log.Logger = new LoggerConfiguration()
     .Enrich.FromLogContext()
     .Enrich.WithEnvironmentName()
     .Enrich.WithMachineName()
+    .Enrich.WithProperty("ServiceName", "payment-api-instrumented")
+    .Enrich.WithProperty("ServiceVersion", "1.0.0")
+    .Enrich.WithProperty("ServiceNamespace", "ebanking.observability")
+    .Enrich.WithProperty("DeploymentEnvironment", Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production")
+    .Enrich.WithProperty("ContainerId", Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName)
+    .Enrich.WithProperty("HostType", "container")
     .WriteTo.Console(new CompactJsonFormatter())
     .CreateLogger();
 
@@ -26,17 +32,47 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<PaymentService>();
 
-// Configure OpenTelemetry
-var serviceName = "payment-api";
+// Configure OpenTelemetry with proper resource attributes
+var serviceName = "payment-api-instrumented";
 var serviceVersion = "1.0.0";
+var serviceInstanceId = Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName;
 
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource
-        .AddService(serviceName: serviceName, serviceVersion: serviceVersion)
+        .AddService(
+            serviceName: serviceName, 
+            serviceVersion: serviceVersion,
+            serviceInstanceId: serviceInstanceId)
         .AddAttributes(new Dictionary<string, object>
         {
-            ["deployment.environment"] = builder.Environment.EnvironmentName,
-            ["service.namespace"] = "ebanking"
+            // Deployment attributes
+            ["deployment.environment"] = builder.Environment.EnvironmentName.ToLowerInvariant(),
+            ["deployment.environment.type"] = "docker",
+            
+            // Service attributes
+            ["service.namespace"] = "ebanking.observability",
+            ["service.instance.id"] = serviceInstanceId,
+            
+            // Host attributes (OpenTelemetry semantic conventions)
+            ["host.name"] = Environment.MachineName,
+            ["host.id"] = serviceInstanceId,
+            ["host.type"] = "container",
+            
+            // Container attributes
+            ["container.name"] = Environment.GetEnvironmentVariable("HOSTNAME") ?? "unknown",
+            ["container.id"] = Environment.GetEnvironmentVariable("HOSTNAME") ?? "unknown",
+            ["container.runtime"] = "docker",
+            
+            // Cloud/Infrastructure attributes
+            ["cloud.platform"] = "docker-compose",
+            ["cloud.provider"] = "on-premise",
+            
+            // Application metadata
+            ["app.team"] = "platform-engineering",
+            ["app.owner"] = "observability-team",
+            ["app.tier"] = "backend",
+            ["app.type"] = "instrumented-demo",
+            ["app.purpose"] = "observability-testing"
         }))
     .WithTracing(tracing => tracing
         .AddAspNetCoreInstrumentation(options =>

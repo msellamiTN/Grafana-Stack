@@ -124,9 +124,25 @@ services:
     ports:
       - "8888:8888"
     environment:
+      # Application Configuration
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:8888
+      
+      # OpenTelemetry Configuration
       - OpenTelemetry__OtlpEndpoint=http://tempo:4317
+      
+      # Observability Metadata
+      - SERVICE_NAME=payment-api-instrumented
+      - SERVICE_VERSION=1.0.0
+      - SERVICE_NAMESPACE=ebanking.observability
+      - SERVICE_PURPOSE=observability-testing
+      - DEPLOYMENT_ENVIRONMENT=production
+      - DEPLOYMENT_REGION=on-premise
+      - CLUSTER_NAME=observability-stack
+      
+      # Container/Host Information
+      - CONTAINER_RUNTIME=docker
+      - ORCHESTRATOR=docker-compose
     security_opt:
       - no-new-privileges:true
     networks:
