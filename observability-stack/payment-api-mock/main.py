@@ -7,13 +7,10 @@ import random
 import time
 import os
 from dotenv import load_dotenv
+from influxdb_client import InfluxDBClient, Point
+from influxdb_client.client.write_api import SYNCHRONOUS
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 import logging
-
-# Prometheus metrics
-from prometheus_client import (
-    Counter, Histogram, Gauge, Summary,
-    generate_latest, CONTENT_TYPE_LATEST, CollectorRegistry
-)
 
 # Load environment variables
 load_dotenv()
@@ -21,6 +18,14 @@ load_dotenv()
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# InfluxDB configuration
+INFLUX_CONFIG = {
+    "url": os.getenv("INFLUXDB_URL", "http://influxdb:8086"),
+    "token": os.getenv("INFLUXDB_TOKEN", "my-super-secret-auth-token"),
+    "org": os.getenv("INFLUXDB_ORG", "myorg"),
+    "bucket": os.getenv("INFLUXDB_BUCKET", "payments")
+}
 
 # Initialize FastAPI app
 app = FastAPI(title="Payment API", version="1.0.0")
@@ -34,97 +39,56 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Prometheus Registry
-registry = CollectorRegistry()
+# Initialize InfluxDB client
+influx_client = InfluxDBClient(
+    url=INFLUX_CONFIG["url"],
+    token=INFLUX_CONFIG["token"],
+    org=INFLUX_CONFIG["org"],
+    verify_ssl=False,
+    ssl=False
+)
+write_api = influx_client.write_api(write_options=SYNCHRONOUS)
 
-# ============================================
-# PROMETHEUS METRICS DEFINITIONS
-# ============================================
+# === PROMETHEUS METRICS ===
+# These match the dashboard requirements exactly
 
-# Payment amount metrics
-payment_amount_total = Counter(
-    'payment_amount_total',
-    'Total payment amount in EUR',
-    ['status', 'currency', 'payment_method', 'region', 'card_brand'],
-    registry=registry
+PAYMENT_AMOUNT = Counter(
+    'payment_amount_sum',
+    'Total payment amount in base currency (e.g., EUR)',
+    ['status', 'currency', 'payment_method', 'region', 'card_brand']
 )
 
-# Payment count metrics
-payment_count_total = Counter(
+PAYMENT_COUNT = Counter(
     'payment_count_total',
-    'Total number of payments',
-    ['status', 'currency', 'payment_method', 'region', 'card_brand', 'risk_level'],
-    registry=registry
+    'Total number of payment transactions',
+    ['status', 'currency', 'payment_method', 'region', 'card_brand']
 )
 
-# Processing time histogram
-payment_processing_time_seconds = Histogram(
-    'payment_processing_time_seconds',
-    'Payment processing time in seconds',
-    ['status', 'payment_method'],
-    buckets=[0.05, 0.1, 0.2, 0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0],
-    registry=registry
+PAYMENT_PROCESSING_DURATION = Histogram(
+    'payment_processing_duration_seconds',
+    'Processing time of payment transactions',
+    ['status', 'payment_method', 'region', 'card_brand'],
+    buckets=[0.05, 0.1, 0.2, 0.3, 0.5, 0.8, 1.0, 2.0, 5.0]  # seconds
 )
 
-# Latency metrics
-payment_network_latency_ms = Histogram(
-    'payment_network_latency_ms',
-    'Network latency in milliseconds',
-    ['region'],
-    buckets=[5, 10, 20, 30, 50, 75, 100, 150, 200],
-    registry=registry
+# Optional: generic HTTP metrics (already partially covered)
+from prometheus_client import Counter as GenericCounter, Histogram as GenericHistogram
+
+REQUEST_COUNT = GenericCounter(
+    'payment_requests_total',
+    'Total HTTP requests to payment endpoints',
+    ['method', 'endpoint', 'status']
 )
 
-payment_gateway_latency_ms = Histogram(
-    'payment_gateway_latency_ms',
-    'Gateway latency in milliseconds',
-    ['payment_method'],
-    buckets=[10, 25, 50, 75, 100, 150, 200, 300, 500],
-    registry=registry
+REQUEST_LATENCY = GenericHistogram(
+    'payment_request_duration_seconds',
+    'HTTP request duration',
+    ['method', 'endpoint']
 )
 
-# Fraud score summary
-payment_fraud_score = Summary(
-    'payment_fraud_score',
-    'Payment fraud score',
-    ['status', 'risk_level'],
-    registry=registry
-)
+# === Helper functions ===
 
-# Fee metrics
-payment_fee_total = Counter(
-    'payment_fee_total',
-    'Total payment processing fees',
-    ['currency'],
-    registry=registry
-)
-
-# Error metrics
-payment_errors_total = Counter(
-    'payment_errors_total',
-    'Total payment errors',
-    ['error_code', 'payment_method'],
-    registry=registry
-)
-
-# Retry metrics
-payment_retries_total = Counter(
-    'payment_retries_total',
-    'Total payment retries',
-    ['status'],
-    registry=registry
-)
-
-# Current gauges for real-time monitoring
-payment_success_rate = Gauge(
-    'payment_success_rate',
-    'Current success rate percentage',
-    registry=registry
-)
-
-# Helper functions
 def generate_realistic_amount() -> float:
-    """Realistic distribution: 80% < 200€, 15% 200-1000€, 5% > 1000€"""
     rand = random.random()
     if rand < 0.80:
         return round(random.gauss(75, 45), 2)
@@ -134,13 +98,13 @@ def generate_realistic_amount() -> float:
         return round(random.gauss(2000, 1000), 2)
 
 def generate_processing_time(status: str) -> float:
-    """Realistic processing time based on status"""
     if status == "success":
         return max(0.05, round(random.gauss(0.24, 0.10), 3))
     else:
         return max(0.1, round(random.gauss(0.80, 0.35), 3))
 
-# Models
+# === Models ===
+
 class PaymentRequest(BaseModel):
     amount: float = 0.0
     currency: str = "EUR"
@@ -155,39 +119,43 @@ class PaymentResponse(BaseModel):
     timestamp: str
     processing_time_ms: float
 
-# Success rate tracker (simple moving average)
-success_count = 0
-total_count = 0
+# === Middleware for generic HTTP metrics ===
 
-def update_success_rate(is_success: bool):
-    global success_count, total_count
-    total_count += 1
-    if is_success:
-        success_count += 1
-    
-    if total_count > 0:
-        rate = (success_count / total_count) * 100
-        payment_success_rate.set(rate)
+@app.middleware("http")
+async def monitor_requests(request: Request, call_next):
+    start_time = time.time()
+    method = request.method
+    endpoint = request.url.path
 
-# Health check endpoint
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        REQUEST_COUNT.labels(method, endpoint, status_code).inc()
+        REQUEST_LATENCY.labels(method, endpoint).observe(time.time() - start_time)
+        return response
+    except Exception as e:
+        status_code = 500
+        REQUEST_COUNT.labels(method, endpoint, status_code).inc()
+        raise e
+
+# === Endpoints ===
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
-# Metrics endpoint for Prometheus scraping
 @app.get("/metrics")
 async def metrics():
     return Response(
-        content=generate_latest(registry),
+        content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST
     )
 
-# Process payment
 @app.post("/api/payments", response_model=PaymentResponse)
 async def process_payment(payment: PaymentRequest):
     start_time = time.time()
-    
-    # Determine status (97% success, 2% failed, 1% pending)
+
+    # Determine status
     status_rand = random.random()
     if status_rand < 0.97:
         status = "success"
@@ -195,119 +163,100 @@ async def process_payment(payment: PaymentRequest):
         status = "failed"
     else:
         status = "pending"
-    
+
     is_success = status == "success"
-    
-    # Use realistic amount if not provided
     amount = payment.amount if payment.amount > 0 else generate_realistic_amount()
-    
-    # Generate realistic processing time
     processing_time = generate_processing_time(status)
     time.sleep(processing_time)
-    
-    # Generate additional metrics
-    network_latency = round(random.uniform(5, 50), 1)
-    gateway_latency = round(random.uniform(10, 100), 1)
-    
-    # Generate labels
+
+    # Generate realistic tags
     payment_method = random.choice(["card", "bank_transfer", "wallet", "crypto"])
     region = random.choice(["EU", "US", "ASIA", "LATAM"])
     card_brand = random.choice(["VISA", "MASTERCARD", "AMEX", "DISCOVER"])
-    risk_level = random.choices(
-        ["low", "medium", "high", "critical"],
-        weights=[0.80, 0.15, 0.04, 0.01]
-    )[0]
-    
-    fraud_score = (round(random.uniform(0, 0.05), 3) if is_success 
-                   else round(random.uniform(0.70, 1.0), 3))
-    fee = round(amount * 0.029 + 0.30, 2)
-    error_code = 0 if is_success else random.randint(5001, 5010)
-    retry_count = 0 if is_success else random.randint(1, 3)
-    
-    # Create payment ID
-    payment_id = f"pay_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
-    timestamp = datetime.utcnow().isoformat()
-    
-    # ============================================
-    # RECORD METRICS TO PROMETHEUS
-    # ============================================
-    
-    # Payment amount
-    payment_amount_total.labels(
-        status=status,
-        currency=payment.currency,
-        payment_method=payment_method,
-        region=region,
-        card_brand=card_brand
-    ).inc(amount)
-    
-    # Payment count
-    payment_count_total.labels(
-        status=status,
-        currency=payment.currency,
-        payment_method=payment_method,
-        region=region,
-        card_brand=card_brand,
-        risk_level=risk_level
-    ).inc()
-    
-    # Processing time
-    payment_processing_time_seconds.labels(
-        status=status,
-        payment_method=payment_method
-    ).observe(processing_time)
-    
-    # Latency
-    payment_network_latency_ms.labels(region=region).observe(network_latency)
-    payment_gateway_latency_ms.labels(payment_method=payment_method).observe(gateway_latency)
-    
-    # Fraud score
-    payment_fraud_score.labels(
-        status=status,
-        risk_level=risk_level
-    ).observe(fraud_score)
-    
-    # Fee
-    payment_fee_total.labels(currency=payment.currency).inc(fee)
-    
-    # Errors
-    if not is_success:
-        payment_errors_total.labels(
-            error_code=str(error_code),
-            payment_method=payment_method
-        ).inc()
-        
-        payment_retries_total.labels(status=status).inc(retry_count)
-    
-    # Update success rate
-    update_success_rate(is_success)
-    
-    logger.info(f"Payment {payment_id} processed: {status}")
-    
-    # Prepare response
+    merchant_id = f"merch_{random.randint(1, 500):04d}"
+
+    # === INFLUXDB WRITE ===
+    try:
+        point = Point("payment")
+        point.tag("status", status)
+        point.tag("currency", payment.currency)
+        point.tag("customer_id", payment.customer_id)
+        point.tag("merchant_id", merchant_id)
+        point.tag("payment_method", payment_method)
+        point.tag("region", region)
+        point.tag("card_brand", card_brand)
+        point.tag("risk_level", random.choices(
+            ["low", "medium", "high", "critical"],
+            weights=[0.80, 0.15, 0.04, 0.01]
+        )[0])
+
+        point.field("amount", float(amount))
+        point.field("processing_time", processing_time)
+        point.field("network_latency", round(random.uniform(5, 50), 1))
+        point.field("gateway_latency", round(random.uniform(10, 100), 1))
+        point.field("error_code", 0 if is_success else random.randint(5001, 5010))
+        point.field("retry_count", 0 if is_success else random.randint(1, 3))
+        point.field("fraud_score", round(random.uniform(0, 0.05), 3) if is_success 
+                    else round(random.uniform(0.70, 1.0), 3))
+        point.field("response_time", processing_time * 1000)
+        point.field("fee", round(amount * 0.029 + 0.30, 2))
+        point.field("success", 1 if is_success else 0)
+        point.time(datetime.utcnow())
+
+        write_api.write(
+            bucket=INFLUX_CONFIG["bucket"],
+            org=INFLUX_CONFIG["org"],
+            record=point
+        )
+        logger.info(f"Payment written to InfluxDB: {status}")
+    except Exception as e:
+        logger.error(f"Failed to write to InfluxDB: {str(e)}")
+
+    # === PROMETHEUS METRICS UPDATE ===
+    labels = {
+        "status": status,
+        "currency": payment.currency,
+        "payment_method": payment_method,
+        "region": region,
+        "card_brand": card_brand
+    }
+
+    # Count every transaction
+    PAYMENT_COUNT.labels(**labels).inc()
+
+    # Record amount only for success/failed (not pending)
+    if status in ("success", "failed"):
+        PAYMENT_AMOUNT.labels(**labels).inc(amount)
+
+    # Record processing time
+    PAYMENT_PROCESSING_DURATION.labels(**labels).observe(processing_time)
+
+    # Return response
     if is_success:
-        return {
-            "payment_id": payment_id,
-            "status": "completed",
-            "amount": amount,
-            "currency": payment.currency,
-            "timestamp": timestamp,
-            "processing_time_ms": round(processing_time * 1000, 2)
-        }
+        return PaymentResponse(
+            payment_id=f"pay_{int(time.time() * 1000)}_{random.randint(1000, 9999)}",
+            status="completed",
+            amount=amount,
+            currency=payment.currency,
+            timestamp=datetime.utcnow().isoformat(),
+            processing_time_ms=round(processing_time * 1000, 2)
+        )
     else:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Payment processing failed"
         )
 
-# Get payment statistics
 @app.get("/api/payments/stats")
 async def get_payment_stats():
     return {
-        "total_payments": total_count,
-        "success_rate": (success_count / total_count * 100) if total_count > 0 else 0,
-        "message": "Check /metrics endpoint for detailed Prometheus metrics"
+        "message": "Use /metrics for Prometheus or query InfluxDB directly"
     }
+
+# Optional: expose built-in Prometheus instrumentation (optional)
+from prometheus_fastapi_instrumentator import Instrumentator
+instrumentator = Instrumentator()
+instrumentator.instrument(app).expose(app, include_in_schema=False, endpoint="/metrics-auto")
 
 if __name__ == "__main__":
     import uvicorn
