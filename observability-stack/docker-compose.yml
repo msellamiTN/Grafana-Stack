@@ -92,6 +92,29 @@ services:
       - loki
     networks:
       - observability
+
+  # Tempo - Distributed Tracing
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    restart: unless-stopped
+    ports:
+      - "3200:3200"   # Tempo HTTP
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "9411:9411"   # Zipkin
+      - "14268:14268" # Jaeger ingest
+    command: -config.file=/etc/tempo/tempo.yaml
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml
+      - tempo_data:/var/tempo
+    environment:
+      - TZ=UTC
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - observability
+
   payment-api_instrumented:
     build:
       context: ../payment-api
@@ -334,6 +357,7 @@ volumes:
   prometheus_data:
   grafana_data:
   loki_data:
+  tempo_data:
   alertmanager_data:
   postgres_data:
   minio_data:
