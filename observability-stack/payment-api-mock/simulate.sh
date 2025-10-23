@@ -3,9 +3,35 @@
 # Configuration
 API_URL="http://localhost:8080/api/payments"
 NUM_REQUESTS=${1:-100}  # Default 100, can be overridden
-SIMULATION_MODE=${2:-"normal"}  # normal, burst, peak, stress, realistic, failure
+SIMULATION_MODE=${2:-"normal"}  # normal, burst, peak, stress, realistic, failure, custom
 MAX_CONCURRENT=${3:-5}  # Maximum concurrent requests
-FAILURE_RATE=${4:-30}  # Percentage of intentional failures (for failure mode)
+
+# Custom rate parameters (can be set via command line)
+SUCCESS_RATE=84
+FAILURE_RATE=1
+PENDING_RATE=15
+
+# Parse additional parameters for custom rates
+shift 3  # Skip first 3 parameters
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        success)
+            SUCCESS_RATE="$2"
+            shift 2
+            ;;
+        failure)
+            FAILURE_RATE="$2"
+            shift 2
+            ;;
+        pending)
+            PENDING_RATE="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -168,36 +194,54 @@ make_payment() {
                 # Missing required fields
                 response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
                     -H "Content-Type: application/json" \
+                    -H "X-Success-Rate: $SUCCESS_RATE" \
+                    -H "X-Failure-Rate: $FAILURE_RATE" \
+                    -H "X-Pending-Rate: $PENDING_RATE" \
                     -d "{\"currency\":\"$currency\"}" 2>/dev/null)
                 ;;
             1)
                 # Invalid JSON
                 response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
                     -H "Content-Type: application/json" \
+                    -H "X-Success-Rate: $SUCCESS_RATE" \
+                    -H "X-Failure-Rate: $FAILURE_RATE" \
+                    -H "X-Pending-Rate: $PENDING_RATE" \
                     -d "{amount:$amount,currency:$currency" 2>/dev/null)
                 ;;
             2)
                 # Wrong content type
                 response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
                     -H "Content-Type: text/plain" \
+                    -H "X-Success-Rate: $SUCCESS_RATE" \
+                    -H "X-Failure-Rate: $FAILURE_RATE" \
+                    -H "X-Pending-Rate: $PENDING_RATE" \
                     -d "amount=$amount&currency=$currency" 2>/dev/null)
                 ;;
             3)
                 # Timeout simulation (very large payload)
                 response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
                     -H "Content-Type: application/json" \
+                    -H "X-Success-Rate: $SUCCESS_RATE" \
+                    -H "X-Failure-Rate: $FAILURE_RATE" \
+                    -H "X-Pending-Rate: $PENDING_RATE" \
                     -d "{\"amount\":$amount,\"currency\":\"$currency\",\"customer_id\":\"$customer\",\"description\":\"$(head -c 10000 < /dev/zero | tr '\0' 'x')\"}" 2>/dev/null)
                 ;;
             *)
                 # Duplicate transaction ID
                 response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
                     -H "Content-Type: application/json" \
+                    -H "X-Success-Rate: $SUCCESS_RATE" \
+                    -H "X-Failure-Rate: $FAILURE_RATE" \
+                    -H "X-Pending-Rate: $PENDING_RATE" \
                     -d "{\"amount\":$amount,\"currency\":\"$currency\",\"customer_id\":\"$customer\",\"idempotency_key\":\"duplicate_001\"}" 2>/dev/null)
                 ;;
         esac
     else
         response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL" \
             -H "Content-Type: application/json" \
+            -H "X-Success-Rate: $SUCCESS_RATE" \
+            -H "X-Failure-Rate: $FAILURE_RATE" \
+            -H "X-Pending-Rate: $PENDING_RATE" \
             -d "{\"amount\":$amount,\"currency\":\"$currency\",\"customer_id\":\"$customer\"}" 2>/dev/null)
     fi
     
@@ -273,6 +317,9 @@ echo -e "API URL:          $API_URL"
 echo -e "Requests:         $NUM_REQUESTS"
 echo -e "Mode:             ${YELLOW}${SIMULATION_MODE}${NC}"
 echo -e "Max Concurrent:   $MAX_CONCURRENT"
+echo -e "${GREEN}Success Rate:     ${SUCCESS_RATE}%${NC}"
+echo -e "${RED}Failure Rate:     ${FAILURE_RATE}%${NC}"
+echo -e "${YELLOW}Pending Rate:     ${PENDING_RATE}%${NC}"
 echo -e "${BLUE}========================================${NC}\n"
 
 # Check API health
@@ -390,9 +437,10 @@ ELAPSED=$((END_TIME - START_TIME))
 show_stats $ELAPSED
 
 echo -e "\n${GREEN}✅ Simulation completed!${NC}"
-echo -e "\nUsage: $0 [num_requests] [mode] [max_concurrent] [failure_rate]"
+echo -e "\nUsage: $0 [num_requests] [mode] [max_concurrent] [success N] [failure N] [pending N]"
 echo -e "Modes: normal, burst, peak, stress, realistic, failure"
-echo -e "Examples:"
-echo -e "  $0 500 peak 10          # Peak mode with 500 requests"
-echo -e "  $0 200 failure 5 50     # Failure mode with 50% error rate"
-echo -e "  $0 100 stress 20        # Stress test with 20 concurrent\n"
+echo -e "\nExamples:"
+echo -e "  $0 100 normal 5                              # Normal mode with default rates"
+echo -e "  $0 100 normal 5 success 70 failure 10 pending 20  # Custom rates: 70% success, 10% failure, 20% pending"
+echo -e "  $0 500 peak 10 success 90 failure 5 pending 5     # Peak mode with 90% success rate"
+echo -e "  $0 200 burst 3 success 50 failure 30 pending 20   # Burst mode with high failure rate\n"

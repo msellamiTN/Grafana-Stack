@@ -156,14 +156,26 @@ async def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @app.post("/api/payments", response_model=PaymentResponse)
-async def process_payment(payment: PaymentRequest):
+async def process_payment(payment: PaymentRequest, request: Request):
     start_time = time.time()
 
-    # Determine status
+    # Get custom rates from headers (if provided)
+    success_rate = float(request.headers.get("X-Success-Rate", "84")) / 100
+    failure_rate = float(request.headers.get("X-Failure-Rate", "1")) / 100
+    pending_rate = float(request.headers.get("X-Pending-Rate", "15")) / 100
+    
+    # Normalize rates to ensure they sum to 1.0
+    total = success_rate + failure_rate + pending_rate
+    if total > 0:
+        success_rate /= total
+        failure_rate /= total
+        pending_rate /= total
+    
+    # Determine status based on custom or default rates
     r = random.random()
-    if r < 0.84:
+    if r < success_rate:
         status = "success"
-    elif r < 0.85:
+    elif r < success_rate + failure_rate:
         status = "failed"
     else:
         status = "pending"
