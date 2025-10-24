@@ -130,6 +130,7 @@ services:
       
       # OpenTelemetry Configuration
       - OpenTelemetry__OtlpEndpoint=http://tempo:4317
+      - DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_HTTP2UNENCRYPTEDSUPPORT=true
       
       # Observability Metadata
       - SERVICE_NAME=payment-api-instrumented
