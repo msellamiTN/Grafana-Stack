@@ -4,6 +4,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using PaymentApi.Services;
 using Serilog;
+using Serilog.Events;
 using Serilog.Formatting.Compact;
 using OpenTelemetry.Instrumentation.Runtime;
 using OpenTelemetry.Instrumentation.Process;
@@ -21,6 +22,11 @@ Log.Logger = new LoggerConfiguration()
     .Enrich.WithProperty("DeploymentEnvironment", Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production")
     .Enrich.WithProperty("ContainerId", Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName)
     .Enrich.WithProperty("HostType", "container")
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.AspNetCore.Hosting.Diagnostics", LogEventLevel.Warning)
+    .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
     .WriteTo.Console(new CompactJsonFormatter())
     .CreateLogger();
 
@@ -81,6 +87,9 @@ builder.Services.AddOpenTelemetry()
         .AddAspNetCoreInstrumentation(options =>
         {
             options.RecordException = true;
+            options.Filter = httpContext =>
+                !httpContext.Request.Path.StartsWithSegments("/metrics") &&
+                !httpContext.Request.Path.StartsWithSegments("/health");
             options.EnrichWithHttpRequest = (activity, httpRequest) =>
             {
                 activity.SetTag("http.request.body.size", httpRequest.ContentLength);
@@ -109,7 +118,12 @@ builder.Services.AddOpenTelemetry()
             Console.WriteLine($"[OpenTelemetry] OTLP Exporter configured with endpoint: {endpoint}");
         }))
     .WithMetrics(metrics => metrics
-        .AddAspNetCoreInstrumentation()
+        .AddAspNetCoreInstrumentation(options =>
+        {
+            options.Filter = ctx =>
+                !ctx.Request.Path.StartsWithSegments("/metrics") &&
+                !ctx.Request.Path.StartsWithSegments("/health");
+        })
         .AddHttpClientInstrumentation()
         .AddRuntimeInstrumentation()
         .AddProcessInstrumentation()
@@ -137,7 +151,18 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
-app.UseSerilogRequestLogging();
+app.UseSerilogRequestLogging(options =>
+{
+    options.GetLevel = (httpContext, elapsed, ex) =>
+    {
+        var path = httpContext.Request.Path.Value;
+        if (!string.IsNullOrEmpty(path) && (path.StartsWith("/metrics") || path.StartsWith("/health")))
+        {
+            return LogEventLevel.Debug;
+        }
+        return LogEventLevel.Information;
+    };
+});
 
 // Prometheus metrics endpoint
 app.MapPrometheusScrapingEndpoint();
