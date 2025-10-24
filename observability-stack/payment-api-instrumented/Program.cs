@@ -118,12 +118,7 @@ builder.Services.AddOpenTelemetry()
             Console.WriteLine($"[OpenTelemetry] OTLP Exporter configured with endpoint: {endpoint}");
         }))
     .WithMetrics(metrics => metrics
-        .AddAspNetCoreInstrumentation(options =>
-        {
-            options.Filter = ctx =>
-                !ctx.Request.Path.StartsWithSegments("/metrics") &&
-                !ctx.Request.Path.StartsWithSegments("/health");
-        })
+        .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation()
         .AddRuntimeInstrumentation()
         .AddProcessInstrumentation()
