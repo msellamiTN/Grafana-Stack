@@ -26,6 +26,10 @@ RUN apt-get update \
 # Create non-root user
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
+# Create log directory for shared volume (Loki)
+RUN mkdir -p /var/log/payment-api \
+    && chown -R appuser:appuser /var/log/payment-api
+
 # Copy published app
 COPY --from=publish /app/publish .
 
@@ -45,5 +49,10 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 # Set environment variables
 ENV ASPNETCORE_URLS=http://+:8888
 ENV ASPNETCORE_ENVIRONMENT=Production
+ENV LOG_DIRECTORY=/var/log/payment-api
+ENV ENABLE_FILE_LOGGING=false
+
+# Volume for logs (to be mounted by Loki/Promtail)
+VOLUME ["/var/log/payment-api"]
 
 ENTRYPOINT ["dotnet", "PaymentApi.dll"]
